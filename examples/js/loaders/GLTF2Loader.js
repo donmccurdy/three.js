@@ -74,6 +74,12 @@ THREE.GLTF2Loader = ( function () {
 
 			}
 
+			if ( json.extensionsUsed && json.extensionsUsed.indexOf( EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ) >= 0 ) {
+
+				extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ] = new GLTFDracoMeshCompressionExtension();
+
+			}
+
 			console.time( 'GLTF2Loader' );
 
 			var parser = new GLTFParser( json, extensions, {
@@ -263,7 +269,8 @@ THREE.GLTF2Loader = ( function () {
 
 	var EXTENSIONS = {
 		KHR_BINARY_GLTF: 'KHR_binary_glTF',
-		KHR_MATERIALS_COMMON: 'KHR_materials_common'
+		KHR_MATERIALS_COMMON: 'KHR_materials_common',
+		KHR_DRACO_MESH_COMPRESSION: 'KHR_draco_mesh_compression'
 	};
 
 	/* MATERIALS COMMON EXTENSION */
@@ -384,6 +391,24 @@ THREE.GLTF2Loader = ( function () {
 		}
 
 	}
+
+	/* DRACO MESH COMPRESSION EXTENSION */
+
+	function GLTFDracoMeshCompressionExtension () {
+
+		this.name = EXTENSIONS.KHR_DRACO_MESH_COMPRESSION;
+
+		this.dracoLoader = new THREE.DRACOLoader();
+
+	}
+
+	GLTFDracoMeshCompressionExtension.prototype.decodePrimitive = function ( primitive, dependencies ) {
+
+		var bufferViewID = primitive.extensions[ this.name ].bufferView;
+		var bufferView = dependencies.bufferViews[ bufferViewID ];
+		return this.dracoLoader.decodeDracoFile( bufferView );
+
+	};
 
 	/*********************************/
 	/********** INTERNALS ************/
@@ -1675,10 +1700,12 @@ THREE.GLTF2Loader = ( function () {
 	GLTFParser.prototype.loadMeshes = function () {
 
 		var json = this.json;
+		var extensions = this.extensions;
 
 		return this._withDependencies( [
 
 			"accessors",
+			"bufferViews",
 			"materials"
 
 		] ).then( function ( dependencies ) {
@@ -1695,14 +1722,16 @@ THREE.GLTF2Loader = ( function () {
 				for ( var name in primitives ) {
 
 					var primitive = primitives[ name ];
-
-					var material = primitive.material !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
-
-					var geometry;
-
 					var meshNode;
 
-					if ( primitive.mode === WEBGL_CONSTANTS.TRIANGLES || primitive.mode === undefined ) {
+					if ( primitive.extensions && primitive.extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ] ) {
+
+						var geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies );
+						var material = dependencies.materials !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
+
+						meshNode = new THREE.Mesh( geometry, material );
+
+					} else if ( primitive.mode === WEBGL_CONSTANTS.TRIANGLES || primitive.mode === undefined ) {
 
 						geometry = new THREE.BufferGeometry();
 
@@ -1769,8 +1798,9 @@ THREE.GLTF2Loader = ( function () {
 
 						}
 
+						var material = dependencies.materials !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
+
 						meshNode = new THREE.Mesh( geometry, material );
-						meshNode.castShadow = true;
 
 					} else if ( primitive.mode === WEBGL_CONSTANTS.LINES ) {
 
@@ -1802,6 +1832,8 @@ THREE.GLTF2Loader = ( function () {
 
 						}
 
+						var material = dependencies.materials[ primitive.material ];
+
 						if ( primitive.indices !== undefined ) {
 
 							geometry.setIndex( dependencies.accessors[ primitive.indices ] );
@@ -1816,17 +1848,14 @@ THREE.GLTF2Loader = ( function () {
 
 					} else {
 
-						throw new Error( "Only triangular and line primitives are supported" );
-
-					}
-
-					if ( geometry.attributes.color !== undefined ) {
-
 						material.vertexColors = THREE.VertexColors;
 						material.needsUpdate = true;
 
+						continue;
+
 					}
 
+					meshNode.castShadow = true;
 					meshNode.name = ( name === "0" ? group.name : group.name + name );
 
 					if ( primitive.extras ) meshNode.userData = primitive.extras;
