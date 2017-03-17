@@ -1724,10 +1724,11 @@ THREE.GLTF2Loader = ( function () {
 					var primitive = primitives[ name ];
 					var meshNode;
 
+					var material = primitive.material !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
+
 					if ( primitive.extensions && primitive.extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ] ) {
 
 						var geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies );
-						var material = dependencies.materials !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
 
 						meshNode = new THREE.Mesh( geometry, material );
 
@@ -1798,8 +1799,6 @@ THREE.GLTF2Loader = ( function () {
 
 						}
 
-						var material = dependencies.materials !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
-
 						meshNode = new THREE.Mesh( geometry, material );
 
 					} else if ( primitive.mode === WEBGL_CONSTANTS.LINES ) {
@@ -1831,8 +1830,6 @@ THREE.GLTF2Loader = ( function () {
 							}
 
 						}
-
-						var material = dependencies.materials[ primitive.material ];
 
 						if ( primitive.indices !== undefined ) {
 
