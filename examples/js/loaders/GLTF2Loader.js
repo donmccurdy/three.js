@@ -399,14 +399,15 @@ THREE.GLTF2Loader = ( function () {
 		this.name = EXTENSIONS.KHR_DRACO_MESH_COMPRESSION;
 
 		this.dracoLoader = new THREE.DRACOLoader();
+                this.dracoLoader.setDracoDecoderType({});
 
 	}
 
-	GLTFDracoMeshCompressionExtension.prototype.decodePrimitive = function ( primitive, dependencies ) {
+	GLTFDracoMeshCompressionExtension.prototype.decodePrimitive = function ( primitive, dependencies, onDecode ) {
 
 		var bufferViewID = primitive.extensions[ this.name ].bufferView;
 		var bufferView = dependencies.bufferViews[ bufferViewID ];
-		return this.dracoLoader.decodeDracoFile( bufferView );
+		this.dracoLoader.decodeDracoFile( bufferView, onDecode);
 
 	};
 
@@ -1737,9 +1738,10 @@ THREE.GLTF2Loader = ( function () {
 
 					if ( primitive.extensions && primitive.extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ] ) {
 
-						var geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies );
+						var geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies, function (geometry) {
+                                                  meshNode = new THREE.Mesh( geometry, material );
+                                                });
 
-						meshNode = new THREE.Mesh( geometry, material );
 
 					} else if ( primitive.mode === WEBGL_CONSTANTS.TRIANGLES || primitive.mode === undefined ) {
 
