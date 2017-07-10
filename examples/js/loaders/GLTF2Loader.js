@@ -2146,13 +2146,14 @@ THREE.GLTF2Loader = ( function () {
 				for ( var name in primitives ) {
 
 					var primitive = primitives[ name ];
+                                        var geometry;
 					var meshNode;
 
 					var material = primitive.material !== undefined ? dependencies.materials[ primitive.material ] : createDefaultMaterial();
 
 					if ( primitive.extensions && primitive.extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ] ) {
 
-						var geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies, function (geometry) {
+						geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies, function (geometry) {
                                                   meshNode = new THREE.Mesh( geometry, material );
                                                 });
 
@@ -2381,8 +2382,6 @@ THREE.GLTF2Loader = ( function () {
 
 						material.vertexColors = THREE.VertexColors;
 						material.needsUpdate = true;
-
-						continue;
 
 					}
 
