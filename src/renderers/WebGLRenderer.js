@@ -1,4 +1,4 @@
-import { REVISION, MaxEquation, MinEquation, RGB_ETC1_Format, RGBA_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGB_PVRTC_2BPPV1_Format, RGB_PVRTC_4BPPV1_Format, RGBA_S3TC_DXT5_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT1_Format, RGB_S3TC_DXT1_Format, SrcAlphaSaturateFactor, OneMinusDstColorFactor, DstColorFactor, OneMinusDstAlphaFactor, DstAlphaFactor, OneMinusSrcAlphaFactor, SrcAlphaFactor, OneMinusSrcColorFactor, SrcColorFactor, OneFactor, ZeroFactor, ReverseSubtractEquation, SubtractEquation, AddEquation, DepthFormat, DepthStencilFormat, LuminanceAlphaFormat, LuminanceFormat, RGBAFormat, RGBFormat, AlphaFormat, HalfFloatType, FloatType, UnsignedIntType, IntType, UnsignedShortType, ShortType, ByteType, UnsignedInt248Type, UnsignedShort565Type, UnsignedShort5551Type, UnsignedShort4444Type, UnsignedByteType, LinearMipMapLinearFilter, LinearMipMapNearestFilter, LinearFilter, NearestMipMapLinearFilter, NearestMipMapNearestFilter, NearestFilter, MirroredRepeatWrapping, ClampToEdgeWrapping, RepeatWrapping, FrontFaceDirectionCW, NoBlending, TriangleFanDrawMode, TriangleStripDrawMode, TrianglesDrawMode, NoColors, FlatShading, LinearToneMapping } from '../constants';
+import { REVISION, MaxEquation, MinEquation, RGB_ETC1_Format, RGBA_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGB_PVRTC_2BPPV1_Format, RGB_PVRTC_4BPPV1_Format, RGBA_S3TC_DXT5_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT1_Format, RGB_S3TC_DXT1_Format, SrcAlphaSaturateFactor, OneMinusDstColorFactor, DstColorFactor, OneMinusDstAlphaFactor, DstAlphaFactor, OneMinusSrcAlphaFactor, SrcAlphaFactor, OneMinusSrcColorFactor, SrcColorFactor, OneFactor, ZeroFactor, ReverseSubtractEquation, SubtractEquation, AddEquation, DepthFormat, DepthStencilFormat, LuminanceAlphaFormat, LuminanceFormat, RGBAFormat, RGBFormat, AlphaFormat, HalfFloatType, FloatType, UnsignedIntType, IntType, UnsignedShortType, ShortType, ByteType, UnsignedInt248Type, UnsignedShort565Type, UnsignedShort5551Type, UnsignedShort4444Type, UnsignedByteType, LinearMipMapLinearFilter, LinearMipMapNearestFilter, LinearFilter, NearestMipMapLinearFilter, NearestMipMapNearestFilter, NearestFilter, MirroredRepeatWrapping, ClampToEdgeWrapping, RepeatWrapping, FrontFaceDirectionCW, NoBlending, TriangleFanDrawMode, TriangleStripDrawMode, TrianglesDrawMode, NoColors, LinearToneMapping } from '../constants';
 import { _Math } from '../math/Math';
 import { Matrix4 } from '../math/Matrix4';
 import { DataTexture } from '../textures/DataTexture';
@@ -110,9 +110,10 @@ function WebGLRenderer( parameters ) {
 
 	var _this = this,
 
+		_isContextLost = false,
+
 		// internal state cache
 
-		_currentProgram = null,
 		_currentRenderTarget = null,
 		_currentFramebuffer = null,
 		_currentMaterialId = - 1,
@@ -121,10 +122,9 @@ function WebGLRenderer( parameters ) {
 		_currentCamera = null,
 		_currentArrayCamera = null,
 
+		_currentViewport = new Vector4(),
 		_currentScissor = new Vector4(),
 		_currentScissorTest = null,
-
-		_currentViewport = new Vector4(),
 
 		//
 
@@ -137,10 +137,9 @@ function WebGLRenderer( parameters ) {
 
 		_pixelRatio = 1,
 
+		_viewport = new Vector4( 0, 0, _width, _height ),
 		_scissor = new Vector4( 0, 0, _width, _height ),
 		_scissorTest = false,
-
-		_viewport = new Vector4( 0, 0, _width, _height ),
 
 		// frustum
 
@@ -253,6 +252,7 @@ function WebGLRenderer( parameters ) {
 		}
 
 		_canvas.addEventListener( 'webglcontextlost', onContextLost, false );
+		_canvas.addEventListener( 'webglcontextrestored', onContextRestore, false );
 
 	} catch ( error ) {
 
@@ -260,42 +260,56 @@ function WebGLRenderer( parameters ) {
 
 	}
 
-	var extensions = new WebGLExtensions( _gl );
+	var extensions, capabilities, state;
+	var properties, textures, attributes, geometries, objects;
+	var programCache, lightCache, renderLists;
 
-	extensions.get( 'WEBGL_depth_texture' );
-	extensions.get( 'OES_texture_float' );
-	extensions.get( 'OES_texture_float_linear' );
-	extensions.get( 'OES_texture_half_float' );
-	extensions.get( 'OES_texture_half_float_linear' );
-	extensions.get( 'OES_standard_derivatives' );
-	extensions.get( 'ANGLE_instanced_arrays' );
+	var background, bufferRenderer, indexedBufferRenderer;
 
-	if ( extensions.get( 'OES_element_index_uint' ) ) {
+	function initGLContext() {
 
-		BufferGeometry.MaxIndex = 4294967296;
+		extensions = new WebGLExtensions( _gl );
+		extensions.get( 'WEBGL_depth_texture' );
+		extensions.get( 'OES_texture_float' );
+		extensions.get( 'OES_texture_float_linear' );
+		extensions.get( 'OES_texture_half_float' );
+		extensions.get( 'OES_texture_half_float_linear' );
+		extensions.get( 'OES_standard_derivatives' );
+		extensions.get( 'ANGLE_instanced_arrays' );
+
+		if ( extensions.get( 'OES_element_index_uint' ) ) {
+
+			BufferGeometry.MaxIndex = 4294967296;
+
+		}
+
+		capabilities = new WebGLCapabilities( _gl, extensions, parameters );
+
+		state = new WebGLState( _gl, extensions, paramThreeToGL );
+		state.scissor( _currentScissor.copy( _scissor ).multiplyScalar( _pixelRatio ) );
+		state.viewport( _currentViewport.copy( _viewport ).multiplyScalar( _pixelRatio ) );
+
+		properties = new WebGLProperties();
+		textures = new WebGLTextures( _gl, extensions, state, properties, capabilities, paramThreeToGL, _infoMemory );
+		attributes = new WebGLAttributes( _gl );
+		geometries = new WebGLGeometries( _gl, attributes, _infoMemory );
+		objects = new WebGLObjects( _gl, geometries, _infoRender );
+		programCache = new WebGLPrograms( _this, capabilities );
+		lightCache = new WebGLLights();
+		renderLists = new WebGLRenderLists();
+
+		background = new WebGLBackground( _this, state, objects, _premultipliedAlpha );
+
+		bufferRenderer = new WebGLBufferRenderer( _gl, extensions, _infoRender );
+		indexedBufferRenderer = new WebGLIndexedBufferRenderer( _gl, extensions, _infoRender );
+
+		_this.info.programs = programCache.programs;
 
 	}
 
-	var capabilities = new WebGLCapabilities( _gl, extensions, parameters );
+	initGLContext();
 
-	var state = new WebGLState( _gl, extensions, paramThreeToGL );
-
-	var properties = new WebGLProperties();
-	var textures = new WebGLTextures( _gl, extensions, state, properties, capabilities, paramThreeToGL, _infoMemory );
-	var attributes = new WebGLAttributes( _gl );
-	var geometries = new WebGLGeometries( _gl, attributes, _infoMemory );
-	var objects = new WebGLObjects( _gl, geometries, _infoRender );
-	var programCache = new WebGLPrograms( this, capabilities );
-	var lightCache = new WebGLLights();
-	var renderLists = new WebGLRenderLists();
-
-	var background = new WebGLBackground( this, state, objects, _premultipliedAlpha );
-	var vr = new WebVRManager( this );
-
-	this.info.programs = programCache.programs;
-
-	var bufferRenderer = new WebGLBufferRenderer( _gl, extensions, _infoRender );
-	var indexedBufferRenderer = new WebGLIndexedBufferRenderer( _gl, extensions, _infoRender );
+	var vr = new WebVRManager( _this );
 
 	//
 
@@ -304,29 +318,6 @@ function WebGLRenderer( parameters ) {
 		return _currentRenderTarget === null ? _pixelRatio : 1;
 
 	}
-
-	function setDefaultGLState() {
-
-		state.init();
-
-		state.scissor( _currentScissor.copy( _scissor ).multiplyScalar( _pixelRatio ) );
-		state.viewport( _currentViewport.copy( _viewport ).multiplyScalar( _pixelRatio ) );
-
-	}
-
-	function resetGLState() {
-
-		_currentProgram = null;
-		_currentCamera = null;
-
-		_currentGeometryProgram = '';
-		_currentMaterialId = - 1;
-
-		state.reset();
-
-	}
-
-	setDefaultGLState();
 
 	this.context = _gl;
 	this.capabilities = capabilities;
@@ -366,6 +357,13 @@ function WebGLRenderer( parameters ) {
 
 		var extension = extensions.get( 'WEBGL_lose_context' );
 		if ( extension ) extension.loseContext();
+
+	};
+
+	this.forceContextRestore = function () {
+
+		var extension = extensions.get( 'WEBGL_lose_context' );
+		if ( extension ) extension.restoreContext();
 
 	};
 
@@ -459,14 +457,14 @@ function WebGLRenderer( parameters ) {
 
 	this.setViewport = function ( x, y, width, height ) {
 
-		_viewport.set( x, _height - y - height, width, height )
+		_viewport.set( x, _height - y - height, width, height );
 		state.viewport( _currentViewport.copy( _viewport ).multiplyScalar( _pixelRatio ) );
 
 	};
 
 	this.setScissor = function ( x, y, width, height ) {
 
-		_scissor.set( x, _height - y - height, width, height )
+		_scissor.set( x, _height - y - height, width, height );
 		state.scissor( _currentScissor.copy( _scissor ).multiplyScalar( _pixelRatio ) );
 
 	};
@@ -521,13 +519,12 @@ function WebGLRenderer( parameters ) {
 
 	};
 
-	// Reset
-
-	this.resetGLState = resetGLState;
+	//
 
 	this.dispose = function () {
 
 		_canvas.removeEventListener( 'webglcontextlost', onContextLost, false );
+		_canvas.removeEventListener( 'webglcontextrestored', onContextRestore, false );
 
 		renderLists.dispose();
 
@@ -539,11 +536,19 @@ function WebGLRenderer( parameters ) {
 
 		event.preventDefault();
 
-		resetGLState();
-		setDefaultGLState();
+		console.log( 'THREE.WebGLRenderer: Context Lost.' );
 
-		properties.clear();
-		objects.clear();
+		_isContextLost = true;
+
+	}
+
+	function onContextRestore( event ) {
+
+		console.log( 'THREE.WebGLRenderer: Context Restored.' );
+
+		_isContextLost = false;
+
+		initGLContext();
 
 	}
 
@@ -624,7 +629,7 @@ function WebGLRenderer( parameters ) {
 			if ( ! material.isMeshPhongMaterial &&
 				! material.isMeshStandardMaterial &&
 				! material.isMeshNormalMaterial &&
-				material.shading === FlatShading ) {
+				material.flatShading === true ) {
 
 				for ( var i = 0, l = object.count * 3; i < l; i += 9 ) {
 
@@ -946,6 +951,10 @@ function WebGLRenderer( parameters ) {
 
 					var attribute = attributes.get( geometryAttribute );
 
+					// TODO Attribute may not be available on context restore
+
+					if ( attribute === undefined ) continue;
+
 					var buffer = attribute.buffer;
 					var type = attribute.type;
 					var bytesPerElement = attribute.bytesPerElement;
@@ -1102,6 +1111,8 @@ function WebGLRenderer( parameters ) {
 
 		}
 
+		if ( _isContextLost ) return;
+
 		// reset caching for this frame
 
 		_currentGeometryProgram = '';
@@ -1219,12 +1230,6 @@ function WebGLRenderer( parameters ) {
 		state.buffers.depth.setTest( true );
 		state.buffers.depth.setMask( true );
 		state.buffers.color.setMask( true );
-
-		if ( camera.isArrayCamera ) {
-
-			_this.setScissorTest( false );
-
-		}
 
 		if ( vr.enabled ) {
 
@@ -1415,9 +1420,9 @@ function WebGLRenderer( parameters ) {
 						var width = bounds.z * _width;
 						var height = bounds.w * _height;
 
-						_this.setViewport( x, y, width, height );
-						_this.setScissor( x, y, width, height );
-						_this.setScissorTest( true );
+						state.viewport( _currentViewport.set( x, y, width, height ).multiplyScalar( _pixelRatio ) );
+						state.scissor( _currentScissor.set( x, y, width, height ).multiplyScalar( _pixelRatio ) );
+						state.setScissorTest( true );
 
 						renderObject( object, scene, camera2, geometry, material, group );
 
@@ -1676,10 +1681,7 @@ function WebGLRenderer( parameters ) {
 			p_uniforms = program.getUniforms(),
 			m_uniforms = materialProperties.shader.uniforms;
 
-		if ( program.id !== _currentProgram ) {
-
-			_gl.useProgram( program.program );
-			_currentProgram = program.id;
+		if ( state.useProgram( program.program ) ) {
 
 			refreshProgram = true;
 			refreshMaterial = true;
@@ -2592,36 +2594,33 @@ function WebGLRenderer( parameters ) {
 
 		}
 
-		var isCube = ( renderTarget && renderTarget.isWebGLRenderTargetCube );
-		var framebuffer;
+		var framebuffer = null;
+		var isCube = false;
 
 		if ( renderTarget ) {
 
-			var renderTargetProperties = properties.get( renderTarget );
+			var __webglFramebuffer = properties.get( renderTarget ).__webglFramebuffer;
 
-			if ( isCube ) {
+			if ( renderTarget.isWebGLRenderTargetCube ) {
 
-				framebuffer = renderTargetProperties.__webglFramebuffer[ renderTarget.activeCubeFace ];
+				framebuffer = __webglFramebuffer[ renderTarget.activeCubeFace ];
+				isCube = true;
 
 			} else {
 
-				framebuffer = renderTargetProperties.__webglFramebuffer;
+				framebuffer = __webglFramebuffer;
 
 			}
 
+			_currentViewport.copy( renderTarget.viewport );
 			_currentScissor.copy( renderTarget.scissor );
 			_currentScissorTest = renderTarget.scissorTest;
 
-			_currentViewport.copy( renderTarget.viewport );
-
 		} else {
 
-			framebuffer = null;
-
+			_currentViewport.copy( _viewport ).multiplyScalar( _pixelRatio );
 			_currentScissor.copy( _scissor ).multiplyScalar( _pixelRatio );
 			_currentScissorTest = _scissorTest;
-
-			_currentViewport.copy( _viewport ).multiplyScalar( _pixelRatio );
 
 		}
 
@@ -2632,10 +2631,9 @@ function WebGLRenderer( parameters ) {
 
 		}
 
+		state.viewport( _currentViewport );
 		state.scissor( _currentScissor );
 		state.setScissorTest( _currentScissorTest );
-
-		state.viewport( _currentViewport );
 
 		if ( isCube ) {
 

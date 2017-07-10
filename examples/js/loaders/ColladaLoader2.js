@@ -373,6 +373,8 @@ THREE.ColladaLoader.prototype = {
 		function buildAnimationChannel( channel, inputSource, outputSource, interpolationSource ) {
 
 			var node = library.nodes[ channel.id ];
+			var object3D = getNode( node.id );
+
 			var transform = node.transforms[ channel.sid ];
 			var defaultMatrix = node.matrix.clone().transpose();
 
@@ -421,21 +423,19 @@ THREE.ColladaLoader.prototype = {
 					break;
 
 				case 'rotate':
-					console.warn( 'THREE.ColladaLoader: Animation transform "%s" not yet implemented.', transform );
+					console.warn( 'THREE.ColladaLoader: Animation transform type "%s" not yet implemented.', transform );
 					break;
 
 				case 'scale':
-					console.warn( 'THREE.ColladaLoader: Animation transform "%s" not yet implemented.', transform );
+					console.warn( 'THREE.ColladaLoader: Animation transform type "%s" not yet implemented.', transform );
 					break;
 
 			}
 
 			var keyframes = prepareAnimationData( data, defaultMatrix );
 
-			if ( node.type !== 'JOINT' ) console.warn( 'THREE.ColladaLoader: Animation data for invalid node with ID "%s" found. The loader only supports animation of bones (skeletal animation).', node.id );
-
 			var animation = {
-				name: '.skeleton.bones[' + node.sid + ']',
+				name: object3D.uuid,
 				keyframes: keyframes
 			}
 
@@ -500,13 +500,7 @@ THREE.ColladaLoader.prototype = {
 				var time = keyframe.time;
 				var value = keyframe.value;
 
-				matrix.set(
-					value[ 0 ], value[ 1 ], value[ 2 ], value[ 3 ],
-					value[ 4 ], value[ 5 ], value[ 6 ], value[ 7 ],
-					value[ 8 ], value[ 9 ], value[ 10 ], value[ 11 ],
-					value[ 12 ], value[ 13 ], value[ 14 ], value[ 15 ]
-				);
-
+				matrix.fromArray( value ).transpose();
 				matrix.decompose( position, quaternion, scale );
 
 				times.push( time );
@@ -1387,7 +1381,7 @@ THREE.ColladaLoader.prototype = {
 
 					var extra = textureObject.extra;
 
-					if ( extra !== undefined && extra.technique !== undefined ) {
+					if ( extra !== undefined && extra.technique !== undefined  && isEmpty( extra.technique ) === false ) {
 
 						var technique = extra.technique;
 
@@ -2092,6 +2086,556 @@ THREE.ColladaLoader.prototype = {
 
 		}
 
+		// kinematics
+
+		function parseKinematicsModel( xml ) {
+
+			var data = {
+				name: xml.getAttribute( 'name' ) || '',
+				joints: [],
+				links: []
+			};
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'technique_common':
+						parseKinematicsTechniqueCommon( child, data );
+						break;
+
+				}
+
+			}
+
+			library.kinematicsModels[ xml.getAttribute( 'id' ) ] = data;
+
+		};
+
+		function buildKinematicsModel( data ) {
+
+			if ( data.build !== undefined ) return data.build;
+
+			return data;
+
+		}
+
+		function getKinematicsModel( id ) {
+
+			return getBuild( library.kinematicsModels[ id ], buildKinematicsModel );
+
+		}
+
+		function parseKinematicsTechniqueCommon( xml, data ) {
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'joint':
+						data.joints.push( parseKinematicsJoint( child ) );
+						break;
+
+					case 'link':
+						data.links.push( parseKinematicsLink( child ) );
+						break;
+
+				}
+
+			}
+
+		}
+
+		function parseKinematicsJoint( xml ) {
+
+			var data;
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'prismatic':
+					case 'revolute':
+						data = parseKinematicsJointParameter( child );
+						break;
+
+				}
+
+			}
+
+			return data;
+
+		}
+
+		function parseKinematicsJointParameter( xml, data ) {
+
+			var data = {
+				sid:  xml.getAttribute( 'sid' ),
+				name: xml.getAttribute( 'name' ) || '',
+				axis: new THREE.Vector3(),
+				limits: {
+					min: 0,
+					max: 0
+				},
+				type: xml.nodeName,
+				static: false,
+				zeroPosition: 0,
+				middlePosition: 0
+			};
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'axis':
+						var array = parseFloats( child.textContent );
+						data.axis.fromArray( array );
+						break;
+					case 'limits':
+						var max = child.getElementsByTagName( 'max' )[ 0 ];
+						var min = child.getElementsByTagName( 'min' )[ 0 ];
+
+						data.limits.max = parseFloat( max.textContent );
+						data.limits.min = parseFloat( min.textContent );
+						break;
+
+				}
+
+			}
+
+			// if min is equal to or greater than max, consider the joint static
+
+			if ( data.limits.min >= data.limits.max ) {
+
+				data.static = true;
+
+			}
+
+			// calculate middle position
+
+			data.middlePosition = ( data.limits.min + data.limits.max ) / 2.0;
+
+			return data;
+
+		}
+
+		function parseKinematicsLink( xml ) {
+
+			var data = {
+				sid: xml.getAttribute( 'sid' ),
+				name: xml.getAttribute( 'name' ) || '',
+				attachments: [],
+				transforms: []
+			};
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'attachment_full':
+						data.attachments.push( parseKinematicsAttachment( child ) );
+						break;
+
+					case 'matrix':
+					case 'translate':
+					case 'rotate':
+						data.transforms.push( parseKinematicsTransform( child ) );
+						break;
+
+				}
+
+			}
+
+			return data;
+
+		}
+
+		function parseKinematicsAttachment( xml ) {
+
+			var data = {
+				joint: xml.getAttribute( 'joint' ).split( '/' ).pop(),
+				transforms: [],
+				links: []
+			};
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'link':
+						data.links.push( parseKinematicsLink( child ) );
+						break;
+
+					case 'matrix':
+					case 'translate':
+					case 'rotate':
+						data.transforms.push( parseKinematicsTransform( child ) );
+						break;
+
+				}
+
+			}
+
+			return data;
+
+		}
+
+		function parseKinematicsTransform( xml ) {
+
+			var data = {
+				type: xml.nodeName
+			};
+
+			var array = parseFloats( xml.textContent );
+
+			switch ( data.type ) {
+
+				case 'matrix':
+					data.obj = new THREE.Matrix4();
+					data.obj.fromArray( array ).transpose();
+					break;
+
+				case 'translate':
+					data.obj = new THREE.Vector3();
+					data.obj.fromArray( array );
+					break;
+
+				case 'rotate':
+					data.obj = new THREE.Vector3();
+					data.obj.fromArray( array );
+					data.angle = THREE.Math.degToRad( array[ 3 ] );
+					break;
+
+			}
+
+			return data;
+
+		}
+
+		function parseKinematicsScene( xml ) {
+
+			var data = {
+				bindJointAxis: []
+			};
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'bind_joint_axis':
+						data.bindJointAxis.push( parseKinematicsBindJointAxis( child ) );
+						break;
+
+				}
+
+			}
+
+			library.kinematicsScenes[ parseId( xml.getAttribute( 'url' ) ) ] = data;
+
+		}
+
+		function parseKinematicsBindJointAxis( xml ) {
+
+			var data = {
+				target: xml.getAttribute( 'target' ).split( '/' ).pop()
+			};
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'axis':
+						var param = child.getElementsByTagName( 'param' )[ 0 ];
+						data.axis = param.textContent;
+						data.jointIndex = parseInt( data.axis.split( 'joint' ).pop().split( '.' )[ 0 ] );
+						break;
+
+				}
+
+			}
+
+			return data;
+
+		}
+
+		function buildKinematicsScene( data ) {
+
+			if ( data.build !== undefined ) return data.build;
+
+			return data;
+
+		}
+
+		function getKinematicsScene( id ) {
+
+			return getBuild( library.kinematicsScenes[ id ], buildKinematicsScene );
+
+		}
+
+		function setupKinematics() {
+
+			var kinematicsModelId = Object.keys( library.kinematicsModels )[ 0 ];
+			var kinematicsSceneId = Object.keys( library.kinematicsScenes )[ 0 ];
+			var visualSceneId = Object.keys( library.visualScenes )[ 0 ];
+
+			if ( kinematicsModelId === undefined || kinematicsSceneId === undefined ) return;
+
+			var kinematicsModel = getKinematicsModel( kinematicsModelId );
+			var kinematicsScene = getKinematicsScene( kinematicsSceneId );
+			var visualScene = getVisualScene( visualSceneId );
+
+			var bindJointAxis = kinematicsScene.bindJointAxis;
+			var jointMap = {};
+
+			for ( var i = 0, l = bindJointAxis.length; i < l; i ++ ) {
+
+				var axis = bindJointAxis[ i ];
+
+				// the result of the following query is an element of type 'translate', 'rotate','scale' or 'matrix'
+
+				var targetElement = collada.querySelector( '[sid="' + axis.target + '"]' );
+
+				if ( targetElement ) {
+
+					// get the parent of the transfrom element
+
+					var parentVisualElement = targetElement.parentElement;
+
+					// connect the joint of the kinematics model with the element in the visual scene
+
+					connect( axis.jointIndex, parentVisualElement );
+
+				}
+
+			}
+
+			function connect( jointIndex, visualElement ) {
+
+				var visualElementId = visualElement.getAttribute( 'id' );
+				var visualElementName = visualElement.getAttribute( 'name' );
+				var joint = kinematicsModel.joints[ jointIndex ];
+
+				visualScene.traverse( function( object ) {
+
+					if ( object.name === visualElementName ) {
+
+						jointMap[ jointIndex ] = {
+							object: object,
+							transforms: buildTransformList( visualElement ),
+							joint: joint,
+							position: joint.zeroPosition
+						};
+
+					}
+
+				} );
+
+			};
+
+			var m0 = new THREE.Matrix4();
+
+			kinematics = {
+
+				joints: kinematicsModel && kinematicsModel.joints,
+
+				getJointValue: function( jointIndex ) {
+
+					var jointData = jointMap[ jointIndex ];
+
+					if ( jointData ) {
+
+						return jointData.position;
+
+					} else {
+
+						console.warn( 'THREE.ColladaLoader: Joint ' + jointIndex + ' doesn\'t exist.' );
+
+					}
+
+				},
+
+				setJointValue: function( jointIndex, value ) {
+
+					var jointData = jointMap[ jointIndex ];
+
+					if ( jointData ) {
+
+						var joint = jointData.joint;
+
+						if ( value > joint.limits.max || value < joint.limits.min ) {
+
+							console.warn( 'THREE.ColladaLoader: Joint ' + jointIndex + ' value ' + value + ' outside of limits (min: ' + joint.limits.min + ', max: ' + joint.limits.max + ').' );
+
+						} else if ( joint.static ) {
+
+							console.warn( 'THREE.ColladaLoader: Joint ' + jointIndex + ' is static.' );
+
+						} else {
+
+							var object = jointData.object;
+							var axis = joint.axis;
+							var transforms = jointData.transforms;
+
+							matrix.identity();
+
+							// each update, we have to apply all transforms in the correct order
+
+							for ( var i = 0; i < transforms.length; i ++ ) {
+
+								var transform = transforms[ i ];
+
+								// if there is a connection of the transform node with a joint, apply the joint value
+
+								if ( transform.sid && transform.sid.indexOf( 'joint' + jointIndex ) !== -1 ) {
+
+									switch ( joint.type ) {
+
+										case 'revolute':
+											matrix.multiply( m0.makeRotationAxis( axis, THREE.Math.degToRad( value ) ) );
+											break;
+
+										case 'prismatic':
+											matrix.multiply( m0.makeTranslation( axis.x * value, axis.y * value, axis.z * value ) );
+											break;
+
+										default:
+											console.warn( 'THREE.ColladaLoader: Unknown joint type: ' + joint.type );
+											break;
+
+									}
+
+								} else {
+
+									switch ( transform.type ) {
+
+										case 'matrix':
+											matrix.multiply( transform.obj );
+											break;
+
+										case 'translate':
+											matrix.multiply( m0.makeTranslation( transform.obj.x, transform.obj.y, transform.obj.z ) );
+											break;
+
+										case 'scale':
+											matrix.scale( transform.obj );
+											break;
+
+										case 'rotate':
+											matrix.multiply( m0.makeRotationAxis( transform.obj, transform.angle ) );
+											break;
+
+									}
+
+								}
+
+							}
+
+							object.matrix.copy( matrix );
+							object.matrix.decompose( object.position, object.quaternion, object.scale );
+
+							jointMap[ jointIndex ].position = value;
+
+						}
+
+					} else {
+
+						console.log( 'THREE.ColladaLoader: ' + jointIndex + ' does not exist.' );
+
+					}
+
+				}
+
+			};
+
+		}
+
+		function buildTransformList( node ) {
+
+			var transforms = [];
+
+			var xml = collada.querySelector( '[id="' + node.id + '"]' );
+
+			for ( var i = 0; i < xml.childNodes.length; i ++ ) {
+
+				var child = xml.childNodes[ i ];
+
+				if ( child.nodeType !== 1 ) continue;
+
+				switch ( child.nodeName ) {
+
+					case 'matrix':
+						var array = parseFloats( child.textContent );
+						var matrix = new THREE.Matrix4().fromArray( array ).transpose();
+						transforms.push( {
+							sid: child.getAttribute( 'sid' ),
+							type: child.nodeName,
+							obj: matrix
+						} );
+						break;
+
+					case 'translate':
+					case 'scale':
+						var array = parseFloats( child.textContent );
+						var vector = new THREE.Vector3().fromArray( array );
+						transforms.push( {
+							sid: child.getAttribute( 'sid' ),
+							type: child.nodeName,
+							obj: vector
+						} );
+						break;
+
+					case 'rotate':
+						var array = parseFloats( child.textContent );
+						var vector = new THREE.Vector3().fromArray( array );
+						var angle = THREE.Math.degToRad( array[ 3 ] );
+						transforms.push({
+							sid: child.getAttribute( 'sid' ),
+							type: child.nodeName,
+							obj: vector,
+							angle: angle
+						} );
+						break;
+
+				}
+
+			}
+
+			return transforms;
+
+		}
+
 		// nodes
 
 		var matrix = new THREE.Matrix4();
@@ -2243,7 +2787,7 @@ THREE.ColladaLoader.prototype = {
 
 		}
 
-		function getSkeleton( skeletons, joints, skinnedMesh ) {
+		function getSkeleton( skeletons, joints ) {
 
 			var boneData = [];
 			var sortedBoneData = [];
@@ -2257,10 +2801,6 @@ THREE.ColladaLoader.prototype = {
 
 				var skeleton = skeletons[ i ];
 				var root = getNode( skeleton );
-
-				// bone hierarchy is a child of the skinned mesh
-
-				skinnedMesh.add( root );
 
 				// setup bone data for a single bone hierarchy
 
@@ -2355,7 +2895,6 @@ THREE.ColladaLoader.prototype = {
 						// ensure a correct animation of the model.
 
 						 boneInverse = new THREE.Matrix4();
-						 console.warn( 'THREE.ColladaLoader: Missing data for bone: %s.', object.name );
 
 					}
 
@@ -2403,7 +2942,7 @@ THREE.ColladaLoader.prototype = {
 				var skeletons = instance.skeletons;
 				var joints = controller.skin.joints;
 
-				var skeleton = getSkeleton( skeletons, joints, object );
+				var skeleton = getSkeleton( skeletons, joints );
 
 				object.bind( skeleton, controller.skin.bindMatrix );
 				object.normalizeSkinWeights();
@@ -2558,7 +3097,9 @@ THREE.ColladaLoader.prototype = {
 
 			for ( var i = 0; i < children.length; i ++ ) {
 
-				group.add( buildNode( children[ i ] ) );
+				var child = children[ i ];
+
+				group.add( getNode( child.id ) );
 
 			}
 
@@ -2648,6 +3189,7 @@ THREE.ColladaLoader.prototype = {
 		//
 
 		var animations = [];
+		var kinematics = {};
 
 		//
 
@@ -2662,7 +3204,9 @@ THREE.ColladaLoader.prototype = {
 			lights: {},
 			geometries: {},
 			nodes: {},
-			visualScenes: {}
+			visualScenes: {},
+			kinematicsModels: {},
+			kinematicsScenes: {}
 		};
 
 		console.time( 'THREE.ColladaLoader: Parse' );
@@ -2678,6 +3222,8 @@ THREE.ColladaLoader.prototype = {
 		parseLibrary( collada, 'library_geometries', 'geometry', parseGeometry );
 		parseLibrary( collada, 'library_nodes', 'node', parseNode );
 		parseLibrary( collada, 'library_visual_scenes', 'visual_scene', parseVisualScene );
+		parseLibrary( collada, 'library_kinematics_models', 'kinematics_model', parseKinematicsModel );
+		parseLibrary( collada, 'scene', 'instance_kinematics_scene', parseKinematicsScene );
 
 		console.timeEnd( 'THREE.ColladaLoader: Parse' );
 
@@ -2697,6 +3243,7 @@ THREE.ColladaLoader.prototype = {
 		console.timeEnd( 'THREE.ColladaLoader: Build' );
 
 		setupAnimations();
+		setupKinematics();
 
 		var scene = parseScene( getElementsByTagName( collada, 'scene' )[ 0 ] );
 
@@ -2712,6 +3259,7 @@ THREE.ColladaLoader.prototype = {
 
 		return {
 			animations: animations,
+			kinematics: kinematics,
 			library: library,
 			scene: scene
 		};
