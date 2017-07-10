@@ -2378,7 +2378,7 @@ THREE.GLTF2Loader = ( function () {
 
 					}
 
-					if ( geometry.attributes.color !== undefined ) {
+					if ( geometry !== undefined && geometry.attributes.color !== undefined ) {
 
 						material.vertexColors = THREE.VertexColors;
 						material.needsUpdate = true;
