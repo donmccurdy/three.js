@@ -296,6 +296,7 @@ THREE.GLTF2Loader = ( function () {
 		KHR_MATERIALS_COMMON: 'KHR_materials_common',
 		KHR_MATERIALS_PBR_SPECULAR_GLOSSINESS: 'KHR_materials_pbrSpecularGlossiness',
 		KHR_TECHNIQUE_WEBGL: 'KHR_technique_webgl',
+		KHR_DRACO_MESH_COMPRESSION: 'KHR_draco_mesh_compression'
 	};
 
 	/**
@@ -1168,6 +1169,31 @@ THREE.GLTF2Loader = ( function () {
 		};
 
 	}
+
+	/* DRACO MESH COMPRESSION EXTENSION */
+
+	function GLTFDracoMeshCompressionExtension () {
+
+		this.name = EXTENSIONS.KHR_DRACO_MESH_COMPRESSION;
+
+		this.dracoLoader = new THREE.DRACOLoader();
+
+	}
+
+	GLTFDracoMeshCompressionExtension.prototype.decodePrimitive = function ( primitive, dependencies ) {
+
+		var extension = primitive.extensions[ this.name ];
+
+		if ( !this.dracoLoader.isVersionSupported( extension.version ) ) {
+
+			throw new Error( 'GLTF2Loader: Incompatible Draco asset version: ' + extension.version + '.' );
+
+		}
+
+		var bufferView = dependencies.bufferViews[ extension.bufferView ];
+		return this.dracoLoader.decodeDracoFile( bufferView );
+
+	};
 
 	/*********************************/
 	/********** INTERNALS ************/
@@ -2156,7 +2182,6 @@ THREE.GLTF2Loader = ( function () {
 						geometry = extensions[ EXTENSIONS.KHR_DRACO_MESH_COMPRESSION ].decodePrimitive( primitive, dependencies, function (geometry) {
                                                   meshNode = new THREE.Mesh( geometry, material );
                                                 });
-
 
 					} else if ( primitive.mode === WEBGL_CONSTANTS.TRIANGLES || primitive.mode === undefined ) {
 
