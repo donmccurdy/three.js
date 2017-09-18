@@ -24,6 +24,7 @@ THREE.DRACOLoader = function(dracoPath, dracoDecoderType, manager) {
     this.materials = null;
     this.verbosity = 0;
     this.attributeOptions = {};
+    this.genericAttributeMap = {};
     this.dracoDecoderType =
         (dracoDecoderType !== undefined) ? dracoDecoderType : {};
     this.drawMode = THREE.TrianglesDrawMode;
@@ -84,6 +85,18 @@ THREE.DRACOLoader.prototype = {
           skipDequantization = skip;
         this.getAttributeOptions(attributeName).skipDequantization =
             skipDequantization;
+    },
+
+    /**
+     * Add attribute id for generic attributes to be loaded.
+     * For now it supports loading skinning attribute:
+     *     'JOINT_INDICE' : Joint indices,
+     *     'JOINT_WEIGHT' : Joint weights.
+     * This is mostly used for glTF Draco extension. See here for details:
+     * https://github.com/KhronosGroup/glTF/pull/874
+     */
+    addAttributeIdForGenericAttributes: function(attributeId, attributeName) {
+      this.genericAttributeMap[attributeName] = attributeId;
     },
 
     decodeDracoFile: function(rawBuffer, callback) {
@@ -155,6 +168,7 @@ THREE.DRACOLoader.prototype = {
          */
         var numFaces, numPoints;
         var numVertexCoordinates, numTextureCoordinates, numColorCoordinates;
+        var numSkinCoordinates;
         var numAttributes;
         var numColorCoordinateComponents = 3;
         // For output basic geometry information.
@@ -171,6 +185,7 @@ THREE.DRACOLoader.prototype = {
         numVertexCoordinates = numPoints * 3;
         numTextureCoordinates = numPoints * 2;
         numColorCoordinates = numPoints * 3;
+        numSkinCoordinates = numPoints * 4;
         numAttributes = dracoGeometry.num_attributes();
         if (this.verbosity > 0) {
           console.log('Number of points loaded: ' + numPoints.toString());
@@ -240,12 +255,43 @@ THREE.DRACOLoader.prototype = {
                                                 textCoordAttributeData);
         }
 
+        // Get Skin attributes
+        var jointsAttributeData;
+        var jointsAttId = this.genericAttributeMap['JOINT_INDICE']; 
+        if (jointsAttId === undefined) {
+          jointsAttId = -1;
+        }
+        if (jointsAttId != -1) {
+          var jointsAttribute = decoder.GetAttribute(dracoGeometry,
+                                                    jointsAttId);
+          jointsAttributeData = new dracoDecoder.DracoFloat32Array();
+          decoder.GetAttributeFloatForAllPoints(dracoGeometry,
+                                                jointsAttribute,
+                                                jointsAttributeData);
+        }
+
+        // Get weights attributes
+        var weightsAttributeData;
+        var weightsAttId = this.genericAttributeMap['JOINT_WEIGHT']; 
+        if (weightsAttId === undefined) {
+          weightsAttId = -1;
+        }
+        if (weightsAttId != -1) {
+          var weightsAttribute = decoder.GetAttribute(dracoGeometry,
+                                                      weightsAttId);
+          weightsAttributeData = new dracoDecoder.DracoFloat32Array();
+          decoder.GetAttributeFloatForAllPoints(dracoGeometry,
+                                                weightsAttribute,
+                                                weightsAttributeData);
+        }
         // Structure for converting to THREEJS geometry later.
         var geometryBuffer = {
             vertices: new Float32Array(numVertexCoordinates),
             normals: new Float32Array(numVertexCoordinates),
             uvs: new Float32Array(numTextureCoordinates),
-            colors: new Float32Array(numColorCoordinates)
+            colors: new Float32Array(numColorCoordinates),
+            skinWeights: new Float32Array(numSkinCoordinates),
+            skinIndices: new Float32Array(numSkinCoordinates)
         };
 
         for (var i = 0; i < numVertexCoordinates; i += 3) {
@@ -279,6 +325,26 @@ THREE.DRACOLoader.prototype = {
           }
         }
 
+        // Add joint indices.
+        if (jointsAttId != -1) {
+          for (var i = 0; i < numSkinCoordinates; i += 4) {
+            geometryBuffer.skinIndices[i] = jointsAttributeData.GetValue(i);
+            geometryBuffer.skinIndices[i + 1] = jointsAttributeData.GetValue(i + 1);
+            geometryBuffer.skinIndices[i + 2] = jointsAttributeData.GetValue(i + 2);
+            geometryBuffer.skinIndices[i + 3] = jointsAttributeData.GetValue(i + 3);
+          }
+        }
+
+        // Add joint weights.
+        if (weightsAttId != -1) {
+          for (var i = 0; i < numSkinCoordinates; i += 4) {
+            geometryBuffer.skinWeights[i] = weightsAttributeData.GetValue(i);
+            geometryBuffer.skinWeights[i + 1] = weightsAttributeData.GetValue(i + 1);
+            geometryBuffer.skinWeights[i + 2] = weightsAttributeData.GetValue(i + 2);
+            geometryBuffer.skinWeights[i + 3] = weightsAttributeData.GetValue(i + 3);
+          }
+        }
+
         dracoDecoder.destroy(posAttributeData);
         if (colorAttId != -1)
           dracoDecoder.destroy(colAttributeData);
@@ -286,6 +352,10 @@ THREE.DRACOLoader.prototype = {
           dracoDecoder.destroy(norAttributeData);
         if (texCoordAttId != -1)
           dracoDecoder.destroy(textCoordAttributeData);
+        if (jointsAttId != -1)
+          dracoDecoder.destroy(jointsAttributeData);
+        if (weightsAttId != -1)
+          dracoDecoder.destroy(weightsAttributeData);
 
         // For mesh, we need to generate the faces.
         if (geometryType == dracoDecoder.TRIANGULAR_MESH) {
@@ -348,6 +418,14 @@ THREE.DRACOLoader.prototype = {
         if (texCoordAttId != -1) {
           geometry.addAttribute('uv',
               new THREE.Float32BufferAttribute(geometryBuffer.uvs, 2));
+        }
+        if (jointsAttId != undefined) {
+          geometry.addAttribute( 'skinIndex',
+              new THREE.Float32BufferAttribute(geometryBuffer.skinIndices, 4));
+        }
+        if (weightsAttId != undefined) {
+          geometry.addAttribute( 'skinWeight',
+              new THREE.Float32BufferAttribute(geometryBuffer.skinWeights, 4));
         }
 
         dracoDecoder.destroy(decoder);

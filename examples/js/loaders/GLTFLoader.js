@@ -481,6 +481,12 @@ THREE.GLTFLoader = ( function () {
 
 		var dracoLoader = this.dracoLoader;
 		var bufferViewIndex = primitive.extensions[ this.name ].bufferView;
+                // Add attribute id for skin attribute;
+                var attributesIdMap = primitive.extensions[ this.name ].attributes;
+                if (attributesIdMap['JOINTS_0'] !== undefined && attributesIdMap['WEIGHTS_0'] !== undefined) {
+                  dracoLoader.addAttributeIdForGenericAttributes(attributesIdMap['JOINTS_0'], 'JOINT_INDICE');
+                  dracoLoader.addAttributeIdForGenericAttributes(attributesIdMap['WEIGHTS_0'], 'JOINT_WEIGHT');
+                }
 
 		return parser.getDependency( 'bufferView', bufferViewIndex ).then( function ( bufferView ) {
 
