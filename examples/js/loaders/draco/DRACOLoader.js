@@ -92,8 +92,8 @@ THREE.DRACOLoader.prototype = {
     /**
      * Add attribute id for generic attributes to be loaded.
      * For now it supports loading skinning attribute:
-     *     'JOINT_INDICE' : Joint indices,
-     *     'JOINT_WEIGHT' : Joint weights.
+     *     'skinIndex' : Joint indices,
+     *     'skinWeight' : Joint weights.
      * This is mostly used for glTF Draco extension. See here for details:
      * https://github.com/KhronosGroup/glTF/pull/874
      */
@@ -259,7 +259,7 @@ THREE.DRACOLoader.prototype = {
 
         // Get Skin attributes
         var jointsAttributeData;
-        var jointsAttId = this.genericAttributeMap['JOINT_INDICE']; 
+        var jointsAttId = this.genericAttributeMap['skinIndex'];
         if (jointsAttId === undefined) {
           jointsAttId = -1;
         }
@@ -274,7 +274,7 @@ THREE.DRACOLoader.prototype = {
 
         // Get weights attributes
         var weightsAttributeData;
-        var weightsAttId = this.genericAttributeMap['JOINT_WEIGHT']; 
+        var weightsAttId = this.genericAttributeMap['skinWeight'];
         if (weightsAttId === undefined) {
           weightsAttId = -1;
         }
@@ -330,10 +330,14 @@ THREE.DRACOLoader.prototype = {
         // Add joint indices.
         if (jointsAttId != -1) {
           for (var i = 0; i < numSkinCoordinates; i += 4) {
-            geometryBuffer.skinIndices[i] = jointsAttributeData.GetValue(i);
-            geometryBuffer.skinIndices[i + 1] = jointsAttributeData.GetValue(i + 1);
-            geometryBuffer.skinIndices[i + 2] = jointsAttributeData.GetValue(i + 2);
-            geometryBuffer.skinIndices[i + 3] = jointsAttributeData.GetValue(i + 3);
+            geometryBuffer.skinIndices[i] =
+                jointsAttributeData.GetValue(i);
+            geometryBuffer.skinIndices[i + 1] =
+                jointsAttributeData.GetValue(i + 1);
+            geometryBuffer.skinIndices[i + 2] =
+                jointsAttributeData.GetValue(i + 2);
+            geometryBuffer.skinIndices[i + 3] =
+                jointsAttributeData.GetValue(i + 3);
           }
         }
 
@@ -341,9 +345,12 @@ THREE.DRACOLoader.prototype = {
         if (weightsAttId != -1) {
           for (var i = 0; i < numSkinCoordinates; i += 4) {
             geometryBuffer.skinWeights[i] = weightsAttributeData.GetValue(i);
-            geometryBuffer.skinWeights[i + 1] = weightsAttributeData.GetValue(i + 1);
-            geometryBuffer.skinWeights[i + 2] = weightsAttributeData.GetValue(i + 2);
-            geometryBuffer.skinWeights[i + 3] = weightsAttributeData.GetValue(i + 3);
+            geometryBuffer.skinWeights[i + 1] =
+                weightsAttributeData.GetValue(i + 1);
+            geometryBuffer.skinWeights[i + 2] =
+                weightsAttributeData.GetValue(i + 2);
+            geometryBuffer.skinWeights[i + 3] =
+                weightsAttributeData.GetValue(i + 3);
           }
         }
 
