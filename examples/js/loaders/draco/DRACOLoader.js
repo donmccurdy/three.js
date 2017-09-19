@@ -24,7 +24,7 @@ THREE.DRACOLoader = function(dracoPath, dracoDecoderType, manager) {
     this.materials = null;
     this.verbosity = 0;
     this.attributeOptions = {};
-    this.genericAttributeMap = {};
+    this.attributeMap = {};
     this.dracoDecoderType =
         (dracoDecoderType !== undefined) ? dracoDecoderType : {};
     this.drawMode = THREE.TrianglesDrawMode;
@@ -90,15 +90,19 @@ THREE.DRACOLoader.prototype = {
     },
 
     /**
-     * Add attribute id for generic attributes to be loaded.
-     * For now it supports loading skinning attribute:
-     *     'skinIndex' : Joint indices,
-     *     'skinWeight' : Joint weights.
-     * This is mostly used for glTF Draco extension. See here for details:
-     * https://github.com/KhronosGroup/glTF/pull/874
+     * Specify attribute id for an attribute in the geometry to be decoded.
+     * The name of the attribute must be one of the supported attribute type
+     * in Three.JS, including:
+     *     'position',
+     *     'color',
+     *     'normal',
+     *     'uv',
+     *     'uv2',
+     *     'skinIndex',
+     *     'skinWeight'.
      */
-    addAttributeIdForGenericAttributes: function(attributeId, attributeName) {
-      this.genericAttributeMap[attributeName] = attributeId;
+    addAttributeNameToId: function(attributeId, attributeName) {
+      this.attributeMap[attributeName] = attributeId;
     },
 
     decodeDracoFile: function(rawBuffer, callback) {
@@ -168,13 +172,7 @@ THREE.DRACOLoader.prototype = {
         /*
          * Example on how to retrieve mesh and attributes.
          */
-        var numFaces, numPoints;
-        var numVertexCoordinates, numTextureCoordinates, numColorCoordinates;
-        var numSkinCoordinates;
-        var numAttributes;
-        var numColorCoordinateComponents = 3;
-        // For output basic geometry information.
-        var geometryInfoStr;
+        var numFaces;
         if (geometryType == dracoDecoder.TRIANGULAR_MESH) {
           numFaces = dracoGeometry.num_faces();
           if (this.verbosity > 0) {
@@ -183,21 +181,20 @@ THREE.DRACOLoader.prototype = {
         } else {
           numFaces = 0;
         }
-        numPoints = dracoGeometry.num_points();
-        numVertexCoordinates = numPoints * 3;
-        numTextureCoordinates = numPoints * 2;
-        numColorCoordinates = numPoints * 3;
-        numSkinCoordinates = numPoints * 4;
-        numAttributes = dracoGeometry.num_attributes();
+
+        var numPoints = dracoGeometry.num_points();
+        var numAttributes = dracoGeometry.num_attributes();
         if (this.verbosity > 0) {
           console.log('Number of points loaded: ' + numPoints.toString());
           console.log('Number of attributes loaded: ' +
               numAttributes.toString());
         }
 
+        // TODO(zhafang): Skip looking for native attribute types if attribute
+        // id is provided.
         // Get position attribute. Must exists.
         var posAttId = decoder.GetAttributeId(dracoGeometry,
-                                                dracoDecoder.POSITION);
+                                              dracoDecoder.POSITION);
         if (posAttId == -1) {
           var errorMsg = 'THREE.DRACOLoader: No position attribute found.';
           console.error(errorMsg);
@@ -206,165 +203,61 @@ THREE.DRACOLoader.prototype = {
           throw new Error(errorMsg);
         }
         var posAttribute = decoder.GetAttribute(dracoGeometry, posAttId);
-        var posAttributeData = new dracoDecoder.DracoFloat32Array();
-        decoder.GetAttributeFloatForAllPoints(
-            dracoGeometry, posAttribute, posAttributeData);
+        this.addAttributeNameToId(posAttId, 'position');
         // Get color attributes if exists.
         var colorAttId = decoder.GetAttributeId(dracoGeometry,
-                                                  dracoDecoder.COLOR);
-        var colAttributeData;
+                                                dracoDecoder.COLOR);
         if (colorAttId != -1) {
           if (this.verbosity > 0) {
             console.log('Loaded color attribute.');
           }
-          var colAttribute = decoder.GetAttribute(dracoGeometry, colorAttId);
-          if (colAttribute.num_components() === 4) {
-            numColorCoordinates = numPoints * 4;
-            numColorCoordinateComponents = 4;
-          }
-          colAttributeData = new dracoDecoder.DracoFloat32Array();
-          decoder.GetAttributeFloatForAllPoints(dracoGeometry, colAttribute,
-                                                colAttributeData);
+          this.addAttributeNameToId(colorAttId, 'color');
         }
-
         // Get normal attributes if exists.
         var normalAttId =
             decoder.GetAttributeId(dracoGeometry, dracoDecoder.NORMAL);
-        var norAttributeData;
         if (normalAttId != -1) {
           if (this.verbosity > 0) {
             console.log('Loaded normal attribute.');
           }
-          var norAttribute = decoder.GetAttribute(dracoGeometry, normalAttId);
-          norAttributeData = new dracoDecoder.DracoFloat32Array();
-          decoder.GetAttributeFloatForAllPoints(dracoGeometry, norAttribute,
-                                                norAttributeData);
+          this.addAttributeNameToId(normalAttId, 'normal');
         }
-
-        // Get texture coord attributes if exists.
         var texCoordAttId =
             decoder.GetAttributeId(dracoGeometry, dracoDecoder.TEX_COORD);
-        var textCoordAttributeData;
         if (texCoordAttId != -1) {
           if (this.verbosity > 0) {
             console.log('Loaded texture coordinate attribute.');
           }
-          var texCoordAttribute = decoder.GetAttribute(dracoGeometry,
-                                                         texCoordAttId);
-          textCoordAttributeData = new dracoDecoder.DracoFloat32Array();
-          decoder.GetAttributeFloatForAllPoints(dracoGeometry,
-                                                texCoordAttribute,
-                                                textCoordAttributeData);
+          this.addAttributeNameToId(texCoordAttId, 'uv');
         }
 
-        // Get Skin attributes
-        var jointsAttributeData;
-        var jointsAttId = this.genericAttributeMap['skinIndex'];
-        if (jointsAttId === undefined) {
-          jointsAttId = -1;
-        }
-        if (jointsAttId != -1) {
-          var jointsAttribute = decoder.GetAttribute(dracoGeometry,
-                                                    jointsAttId);
-          jointsAttributeData = new dracoDecoder.DracoFloat32Array();
-          decoder.GetAttributeFloatForAllPoints(dracoGeometry,
-                                                jointsAttribute,
-                                                jointsAttributeData);
-        }
-
-        // Get weights attributes
-        var weightsAttributeData;
-        var weightsAttId = this.genericAttributeMap['skinWeight'];
-        if (weightsAttId === undefined) {
-          weightsAttId = -1;
-        }
-        if (weightsAttId != -1) {
-          var weightsAttribute = decoder.GetAttribute(dracoGeometry,
-                                                      weightsAttId);
-          weightsAttributeData = new dracoDecoder.DracoFloat32Array();
-          decoder.GetAttributeFloatForAllPoints(dracoGeometry,
-                                                weightsAttribute,
-                                                weightsAttributeData);
-        }
         // Structure for converting to THREEJS geometry later.
-        var geometryBuffer = {
-            vertices: new Float32Array(numVertexCoordinates),
-            normals: new Float32Array(numVertexCoordinates),
-            uvs: new Float32Array(numTextureCoordinates),
-            colors: new Float32Array(numColorCoordinates),
-            skinWeights: new Float32Array(numSkinCoordinates),
-            skinIndices: new Float32Array(numSkinCoordinates)
-        };
-
-        for (var i = 0; i < numVertexCoordinates; i += 3) {
-            geometryBuffer.vertices[i] = posAttributeData.GetValue(i);
-            geometryBuffer.vertices[i + 1] = posAttributeData.GetValue(i + 1);
-            geometryBuffer.vertices[i + 2] = posAttributeData.GetValue(i + 2);
-            // Add normal.
-            if (normalAttId != -1) {
-              geometryBuffer.normals[i] = norAttributeData.GetValue(i);
-              geometryBuffer.normals[i + 1] = norAttributeData.GetValue(i + 1);
-              geometryBuffer.normals[i + 2] = norAttributeData.GetValue(i + 2);
-            }
-        }
-
-        // Add color.
-        for (var i = 0; i < numColorCoordinates; i += 1) {
-          if (colorAttId != -1) {
-            // Draco colors are already normalized.
-            geometryBuffer.colors[i] = colAttributeData.GetValue(i);
-          } else {
-            // Default is white. This is faster than TypedArray.fill().
-            geometryBuffer.colors[i] = 1.0;
+        var geometryBuffer = {};
+        // Import data to Three JS geometry.
+        var geometry = new THREE.BufferGeometry();
+        // Go through all added attributes.
+        for (var attributeName in this.attributeMap) {
+          var attributeId = this.attributeMap[attributeName];
+          var attribute = decoder.GetAttribute(dracoGeometry, attributeId);
+          var numComponents = attribute.num_components();
+          var attributeData = new dracoDecoder.DracoFloat32Array();
+          decoder.GetAttributeFloatForAllPoints(
+              dracoGeometry, attribute, attributeData);
+          var numValues = numPoints * numComponents;
+          // Allocate space for attribute.
+          geometryBuffer[attributeName] = new Float32Array(numValues);
+          // Copy data from decoder.
+          for (var i = 0; i < numValues; i++) {
+            geometryBuffer[attributeName][i] = attributeData.GetValue(i);
           }
+          // Add attribute to THREEJS geometry for rendering.
+          geometry.addAttribute(attributeName,
+              new THREE.Float32BufferAttribute(geometryBuffer[attributeName],
+                                               numComponents));
+          dracoDecoder.destroy(attributeData);
         }
-
-        // Add texture coordinates.
-        if (texCoordAttId != -1) {
-          for (var i = 0; i < numTextureCoordinates; i += 2) {
-            geometryBuffer.uvs[i] = textCoordAttributeData.GetValue(i);
-            geometryBuffer.uvs[i + 1] = textCoordAttributeData.GetValue(i + 1);
-          }
-        }
-
-        // Add joint indices.
-        if (jointsAttId != -1) {
-          for (var i = 0; i < numSkinCoordinates; i += 4) {
-            geometryBuffer.skinIndices[i] =
-                jointsAttributeData.GetValue(i);
-            geometryBuffer.skinIndices[i + 1] =
-                jointsAttributeData.GetValue(i + 1);
-            geometryBuffer.skinIndices[i + 2] =
-                jointsAttributeData.GetValue(i + 2);
-            geometryBuffer.skinIndices[i + 3] =
-                jointsAttributeData.GetValue(i + 3);
-          }
-        }
-
-        // Add joint weights.
-        if (weightsAttId != -1) {
-          for (var i = 0; i < numSkinCoordinates; i += 4) {
-            geometryBuffer.skinWeights[i] = weightsAttributeData.GetValue(i);
-            geometryBuffer.skinWeights[i + 1] =
-                weightsAttributeData.GetValue(i + 1);
-            geometryBuffer.skinWeights[i + 2] =
-                weightsAttributeData.GetValue(i + 2);
-            geometryBuffer.skinWeights[i + 3] =
-                weightsAttributeData.GetValue(i + 3);
-          }
-        }
-
-        dracoDecoder.destroy(posAttributeData);
-        if (colorAttId != -1)
-          dracoDecoder.destroy(colAttributeData);
-        if (normalAttId != -1)
-          dracoDecoder.destroy(norAttributeData);
-        if (texCoordAttId != -1)
-          dracoDecoder.destroy(textCoordAttributeData);
-        if (jointsAttId != -1)
-          dracoDecoder.destroy(jointsAttributeData);
-        if (weightsAttId != -1)
-          dracoDecoder.destroy(weightsAttributeData);
+        // Clear attributes.
+        this.attributeMap = {};
 
         // For mesh, we need to generate the faces.
         if (geometryType == dracoDecoder.TRIANGULAR_MESH) {
@@ -392,16 +285,12 @@ THREE.DRACOLoader.prototype = {
          }
         }
 
-        // Import data to Three JS geometry.
-        var geometry = new THREE.BufferGeometry();
         geometry.drawMode = this.drawMode;
         if (geometryType == dracoDecoder.TRIANGULAR_MESH) {
           geometry.setIndex(new(geometryBuffer.indices.length > 65535 ?
                 THREE.Uint32BufferAttribute : THREE.Uint16BufferAttribute)
               (geometryBuffer.indices, 1));
         }
-        geometry.addAttribute('position',
-            new THREE.Float32BufferAttribute(geometryBuffer.vertices, 3));
         var posTransform = new dracoDecoder.AttributeQuantizationTransform();
         if (posTransform.InitFromAttribute(posAttribute)) {
           // Quantized attribute. Store the quantization parameters into the
@@ -417,26 +306,6 @@ THREE.DRACOLoader.prototype = {
           }
         }
         dracoDecoder.destroy(posTransform);
-        geometry.addAttribute('color',
-            new THREE.Float32BufferAttribute(geometryBuffer.colors,
-                                             numColorCoordinateComponents));
-        if (normalAttId != -1) {
-          geometry.addAttribute('normal',
-              new THREE.Float32BufferAttribute(geometryBuffer.normals, 3));
-        }
-        if (texCoordAttId != -1) {
-          geometry.addAttribute('uv',
-              new THREE.Float32BufferAttribute(geometryBuffer.uvs, 2));
-        }
-        if (jointsAttId != undefined) {
-          geometry.addAttribute( 'skinIndex',
-              new THREE.Float32BufferAttribute(geometryBuffer.skinIndices, 4));
-        }
-        if (weightsAttId != undefined) {
-          geometry.addAttribute( 'skinWeight',
-              new THREE.Float32BufferAttribute(geometryBuffer.skinWeights, 4));
-        }
-
         dracoDecoder.destroy(decoder);
         dracoDecoder.destroy(dracoGeometry);
 

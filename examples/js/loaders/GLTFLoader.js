@@ -474,18 +474,28 @@ THREE.GLTFLoader = ( function () {
 
 		this.name = EXTENSIONS.KHR_DRACO_MESH_COMPRESSION;
 		this.dracoLoader = dracoLoader;
-
+                this.glTFNameToThreeJSName = {
+                  'POSITION' : 'position',
+                  'NORMAL' : 'normal',
+                  'TEXCOORD_0' : 'uv',
+                  'TEXCOORD0' : 'uv',
+                  'TEXCOORD' : 'uv',
+                  'TEXCOORD_1' : 'uv2',
+                  'COLOR_0' : 'color',
+                  'COLOR0' : 'color',
+                  'COLOR' : 'color',
+                  'WEIGHTS_0' : 'skinWeight',
+                  'JOINTS_0' : 'skinIndex'
+                };
 	}
 
 	GLTFDracoMeshCompressionExtension.prototype.decodePrimitive = function ( primitive, parser ) {
 
 		var dracoLoader = this.dracoLoader;
 		var bufferViewIndex = primitive.extensions[ this.name ].bufferView;
-                // Add attribute id for skin attribute;
                 var attributesIdMap = primitive.extensions[ this.name ].attributes;
-                if (attributesIdMap['JOINTS_0'] !== undefined && attributesIdMap['WEIGHTS_0'] !== undefined) {
-                  dracoLoader.addAttributeIdForGenericAttributes(attributesIdMap['JOINTS_0'], 'skinIndex');
-                  dracoLoader.addAttributeIdForGenericAttributes(attributesIdMap['WEIGHTS_0'], 'skinWeight');
+                for (var attributeName in attributesIdMap) {
+                  dracoLoader.addAttributeNameToId(attributesIdMap[attributeName], this.glTFNameToThreeJSName[attributeName]);
                 }
 
 		return parser.getDependency( 'bufferView', bufferViewIndex ).then( function ( bufferView ) {
