@@ -494,15 +494,16 @@ THREE.GLTFLoader = ( function () {
 		var dracoLoader = this.dracoLoader;
 		var bufferViewIndex = primitive.extensions[ this.name ].bufferView;
                 var attributesIdMap = primitive.extensions[ this.name ].attributes;
+                var attributeMap = {};
                 for (var attributeName in attributesIdMap) {
-                  dracoLoader.addAttributeNameToId(attributesIdMap[attributeName], this.glTFNameToThreeJSName[attributeName]);
+                  attributeMap[this.glTFNameToThreeJSName[attributeName]] = attributesIdMap[attributeName];
                 }
 
 		return parser.getDependency( 'bufferView', bufferViewIndex ).then( function ( bufferView ) {
 
 			return new Promise( function ( resolve ) {
 
-				dracoLoader.decodeDracoFile( bufferView, resolve );
+				dracoLoader.decodeDracoFile( bufferView, resolve, attributeMap );
 
 			} );
 

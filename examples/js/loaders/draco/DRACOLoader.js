@@ -90,9 +90,9 @@ THREE.DRACOLoader.prototype = {
     },
 
     /**
-     * Specify attribute id for an attribute in the geometry to be decoded.
-     * The name of the attribute must be one of the supported attribute type
-     * in Three.JS, including:
+     * |attributeMap specifies attribute id for an attribute in the geometry
+     * to be decoded. The name of the attribute must be one of the supported
+     * attribute type in Three.JS, including:
      *     'position',
      *     'color',
      *     'normal',
@@ -100,13 +100,12 @@ THREE.DRACOLoader.prototype = {
      *     'uv2',
      *     'skinIndex',
      *     'skinWeight'.
+     * The format is:
+     *     attributeMap[attributeName] = attributeId
      */
-    addAttributeNameToId: function(attributeId, attributeName) {
-      this.attributeMap[attributeName] = attributeId;
-    },
-
-    decodeDracoFile: function(rawBuffer, callback) {
+    decodeDracoFile: function(rawBuffer, callback, attributeMap) {
       var scope = this;
+      this.attributeMap = (attributeMap !== undefined) ? attributeMap : {};
       THREE.DRACOLoader.getDecoder(this,
           function(dracoDecoder) {
             scope.decodeDracoFileInternal(rawBuffer, dracoDecoder, callback);
@@ -203,7 +202,7 @@ THREE.DRACOLoader.prototype = {
           throw new Error(errorMsg);
         }
         var posAttribute = decoder.GetAttribute(dracoGeometry, posAttId);
-        this.addAttributeNameToId(posAttId, 'position');
+        this.attributeMap['position'] = posAttId;
         // Get color attributes if exists.
         var colorAttId = decoder.GetAttributeId(dracoGeometry,
                                                 dracoDecoder.COLOR);
@@ -211,7 +210,7 @@ THREE.DRACOLoader.prototype = {
           if (this.verbosity > 0) {
             console.log('Loaded color attribute.');
           }
-          this.addAttributeNameToId(colorAttId, 'color');
+          this.attributeMap['color'] = colorAttId;
         }
         // Get normal attributes if exists.
         var normalAttId =
@@ -220,7 +219,7 @@ THREE.DRACOLoader.prototype = {
           if (this.verbosity > 0) {
             console.log('Loaded normal attribute.');
           }
-          this.addAttributeNameToId(normalAttId, 'normal');
+          this.attributeMap['normal'] = normalAttId;
         }
         var texCoordAttId =
             decoder.GetAttributeId(dracoGeometry, dracoDecoder.TEX_COORD);
@@ -228,7 +227,7 @@ THREE.DRACOLoader.prototype = {
           if (this.verbosity > 0) {
             console.log('Loaded texture coordinate attribute.');
           }
-          this.addAttributeNameToId(texCoordAttId, 'uv');
+          this.attributeMap['uv'] = texCoordAttId;
         }
 
         // Structure for converting to THREEJS geometry later.
@@ -239,6 +238,11 @@ THREE.DRACOLoader.prototype = {
         for (var attributeName in this.attributeMap) {
           var attributeId = this.attributeMap[attributeName];
           var attribute = decoder.GetAttribute(dracoGeometry, attributeId);
+          if (attribute.ptr === 0) {
+            var errorMsg = 'THREE.DRACOLoader: No attribute ' + attributeName;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+          }
           var numComponents = attribute.num_components();
           var attributeData = new dracoDecoder.DracoFloat32Array();
           decoder.GetAttributeFloatForAllPoints(
@@ -256,8 +260,6 @@ THREE.DRACOLoader.prototype = {
                                                numComponents));
           dracoDecoder.destroy(attributeData);
         }
-        // Clear attributes.
-        this.attributeMap = {};
 
         // For mesh, we need to generate the faces.
         if (geometryType == dracoDecoder.TRIANGULAR_MESH) {
