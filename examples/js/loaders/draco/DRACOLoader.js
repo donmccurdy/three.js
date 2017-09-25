@@ -237,7 +237,8 @@ THREE.DRACOLoader.prototype = {
         // Go through all added attributes.
         for (var attributeName in this.attributeMap) {
           var attributeId = this.attributeMap[attributeName];
-          var attribute = decoder.GetAttribute(dracoGeometry, attributeId);
+          var attribute = decoder.GetAttributeByUniqueId(dracoGeometry,
+                                                         attributeId);
           if (attribute.ptr === 0) {
             var errorMsg = 'THREE.DRACOLoader: No attribute ' + attributeName;
             console.error(errorMsg);
