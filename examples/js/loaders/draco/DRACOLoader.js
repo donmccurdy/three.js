@@ -24,7 +24,6 @@ THREE.DRACOLoader = function(dracoPath, dracoDecoderType, manager) {
     this.materials = null;
     this.verbosity = 0;
     this.attributeOptions = {};
-    this.attributeMap = {};
     this.dracoDecoderType =
         (dracoDecoderType !== undefined) ? dracoDecoderType : {};
     this.drawMode = THREE.TrianglesDrawMode;
@@ -34,6 +33,15 @@ THREE.DRACOLoader = function(dracoPath, dracoDecoderType, manager) {
     if (typeof DracoDecoderModule === 'undefined') {
       THREE.DRACOLoader.loadDracoDecoder(this);
     }
+    // User defined unique id for attributes.
+    this.attributeUniqueIdMap = {};
+    // Native Draco attribute type to Three.JS attribute type.
+    this.nativeAttributeMap = {
+      'position' : 'POSITION',
+      'normal' : 'NORMAL',
+      'color' : 'COLOR',
+      'uv' : 'TEX_COORD'
+    };
 };
 
 THREE.DRACOLoader.prototype = {
@@ -90,9 +98,9 @@ THREE.DRACOLoader.prototype = {
     },
 
     /**
-     * |attributeMap specifies attribute id for an attribute in the geometry
-     * to be decoded. The name of the attribute must be one of the supported
-     * attribute type in Three.JS, including:
+     * |attributeUniqueIdMap| specifies attribute unique id for an attribute in
+     * the geometry to be decoded. The name of the attribute must be one of the
+     * supported attribute type in Three.JS, including:
      *     'position',
      *     'color',
      *     'normal',
@@ -101,18 +109,19 @@ THREE.DRACOLoader.prototype = {
      *     'skinIndex',
      *     'skinWeight'.
      * The format is:
-     *     attributeMap[attributeName] = attributeId
+     *     attributeUniqueIdMap[attributeName] = attributeId
      */
-    decodeDracoFile: function(rawBuffer, callback, attributeMap) {
+    decodeDracoFile: function(rawBuffer, callback, attributeUniqueIdMap) {
       var scope = this;
-      this.attributeMap = (attributeMap !== undefined) ? attributeMap : {};
+      this.attributeUniqueIdMap = (attributeUniqueIdMap !== undefined) ?
+          attributeUniqueIdMap : {};
       THREE.DRACOLoader.getDecoder(this,
           function(dracoDecoder) {
             scope.decodeDracoFileInternal(rawBuffer, dracoDecoder, callback);
       });
     },
 
-    decodeDracoFileInternal : function(rawBuffer, dracoDecoder, callback) {
+    decodeDracoFileInternal: function(rawBuffer, dracoDecoder, callback) {
       /*
        * Here is how to use Draco Javascript decoder and get the geometry.
        */
@@ -139,6 +148,33 @@ THREE.DRACOLoader.prototype = {
       }
       callback(this.convertDracoGeometryTo3JS(dracoDecoder, decoder,
           geometryType, buffer));
+    },
+
+    addAttributeToGeometry: function(dracoDecoder, decoder, dracoGeometry,
+                                     attributeName, attribute, geometry,
+                                     geometryBuffer) {
+      if (attribute.ptr === 0) {
+        var errorMsg = 'THREE.DRACOLoader: No attribute ' + attributeName;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+      var numComponents = attribute.num_components();
+      var attributeData = new dracoDecoder.DracoFloat32Array();
+      decoder.GetAttributeFloatForAllPoints(
+          dracoGeometry, attribute, attributeData);
+      var numPoints = dracoGeometry.num_points();
+      var numValues = numPoints * numComponents;
+      // Allocate space for attribute.
+      geometryBuffer[attributeName] = new Float32Array(numValues);
+      // Copy data from decoder.
+      for (var i = 0; i < numValues; i++) {
+        geometryBuffer[attributeName][i] = attributeData.GetValue(i);
+      }
+      // Add attribute to THREEJS geometry for rendering.
+      geometry.addAttribute(attributeName,
+          new THREE.Float32BufferAttribute(geometryBuffer[attributeName],
+            numComponents));
+      dracoDecoder.destroy(attributeData);
     },
 
     convertDracoGeometryTo3JS: function(dracoDecoder, decoder, geometryType,
@@ -189,9 +225,7 @@ THREE.DRACOLoader.prototype = {
               numAttributes.toString());
         }
 
-        // TODO(zhafang): Skip looking for native attribute types if attribute
-        // id is provided.
-        // Get position attribute. Must exists.
+        // Verify if there is position attribute.
         var posAttId = decoder.GetAttributeId(dracoGeometry,
                                               dracoDecoder.POSITION);
         if (posAttId == -1) {
@@ -202,64 +236,37 @@ THREE.DRACOLoader.prototype = {
           throw new Error(errorMsg);
         }
         var posAttribute = decoder.GetAttribute(dracoGeometry, posAttId);
-        this.attributeMap['position'] = posAttId;
-        // Get color attributes if exists.
-        var colorAttId = decoder.GetAttributeId(dracoGeometry,
-                                                dracoDecoder.COLOR);
-        if (colorAttId != -1) {
-          if (this.verbosity > 0) {
-            console.log('Loaded color attribute.');
-          }
-          this.attributeMap['color'] = colorAttId;
-        }
-        // Get normal attributes if exists.
-        var normalAttId =
-            decoder.GetAttributeId(dracoGeometry, dracoDecoder.NORMAL);
-        if (normalAttId != -1) {
-          if (this.verbosity > 0) {
-            console.log('Loaded normal attribute.');
-          }
-          this.attributeMap['normal'] = normalAttId;
-        }
-        var texCoordAttId =
-            decoder.GetAttributeId(dracoGeometry, dracoDecoder.TEX_COORD);
-        if (texCoordAttId != -1) {
-          if (this.verbosity > 0) {
-            console.log('Loaded texture coordinate attribute.');
-          }
-          this.attributeMap['uv'] = texCoordAttId;
-        }
 
         // Structure for converting to THREEJS geometry later.
         var geometryBuffer = {};
         // Import data to Three JS geometry.
         var geometry = new THREE.BufferGeometry();
-        // Go through all added attributes.
-        for (var attributeName in this.attributeMap) {
-          var attributeId = this.attributeMap[attributeName];
+
+        // Add native Draco attribute type to geometry.
+        for (var attributeName in this.nativeAttributeMap) {
+          // The native attribute type is only used when no unique Id is
+          // provided. For example, loading .drc files.
+          if (this.attributeUniqueIdMap[attributeName] === undefined) {
+            var attId = decoder.GetAttributeId(dracoGeometry,
+                dracoDecoder[this.nativeAttributeMap[attributeName]]);
+            if (attId !== -1) {
+              if (this.verbosity > 0) {
+                console.log('Loaded ' + attributeName + ' attribute.');
+              }
+              var attribute = decoder.GetAttribute(dracoGeometry, attId);
+              this.addAttributeToGeometry(dracoDecoder, decoder, dracoGeometry,
+                  attributeName, attribute, geometry, geometryBuffer);
+            }
+          }
+        }
+
+        // Add attributes of user specified unique id. E.g. GLTF models.
+        for (var attributeName in this.attributeUniqueIdMap) {
+          var attributeId = this.attributeUniqueIdMap[attributeName];
           var attribute = decoder.GetAttributeByUniqueId(dracoGeometry,
                                                          attributeId);
-          if (attribute.ptr === 0) {
-            var errorMsg = 'THREE.DRACOLoader: No attribute ' + attributeName;
-            console.error(errorMsg);
-            throw new Error(errorMsg);
-          }
-          var numComponents = attribute.num_components();
-          var attributeData = new dracoDecoder.DracoFloat32Array();
-          decoder.GetAttributeFloatForAllPoints(
-              dracoGeometry, attribute, attributeData);
-          var numValues = numPoints * numComponents;
-          // Allocate space for attribute.
-          geometryBuffer[attributeName] = new Float32Array(numValues);
-          // Copy data from decoder.
-          for (var i = 0; i < numValues; i++) {
-            geometryBuffer[attributeName][i] = attributeData.GetValue(i);
-          }
-          // Add attribute to THREEJS geometry for rendering.
-          geometry.addAttribute(attributeName,
-              new THREE.Float32BufferAttribute(geometryBuffer[attributeName],
-                                               numComponents));
-          dracoDecoder.destroy(attributeData);
+          this.addAttributeToGeometry(dracoDecoder, decoder, dracoGeometry,
+              attributeName, attribute, geometry, geometryBuffer);
         }
 
         // For mesh, we need to generate the faces.
