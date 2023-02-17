@@ -31,6 +31,10 @@
 
 			let camera, scene, renderer, stats;
 
+			window.THREE = THREE;
+
+			THREE.ColorManagement.enabled = true;
+
 			init();
 			animate();
 
@@ -52,6 +56,7 @@
 
 				const map = new THREE.TextureLoader().load( 'textures/uv_grid_opengl.jpg' );
 				map.wrapS = map.wrapT = THREE.RepeatWrapping;
+				map.encoding = THREE.sRGBEncoding;
 				map.anisotropy = 16;
 
 				const material = new THREE.MeshPhongMaterial( { map: map, side: THREE.DoubleSide } );
@@ -123,6 +128,22 @@
 				renderer = new THREE.WebGLRenderer( { antialias: true } );
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setClearColor( 0x4285F4 );
+
+				const outputColorSpace = /16\.4 Safari/.test( navigator.userAgent )
+					? THREE.DisplayP3ColorSpace
+					: THREE.SRGBColorSpace;
+
+				renderer.outputColorSpace = outputColorSpace;
+
+				if ( outputColorSpace === THREE.DisplayP3ColorSpace ) {
+
+					renderer.getContext().drawingBufferColorSpace = THREE.DisplayP3ColorSpace;
+
+				}
+
+				console.log({gl: renderer.getContext(), outputColorSpace});
+
 				document.body.appendChild( renderer.domElement );
 
 				stats = new Stats();
