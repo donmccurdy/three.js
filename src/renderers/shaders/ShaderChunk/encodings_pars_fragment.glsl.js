@@ -1,16 +1,11 @@
 export default /* glsl */`
 
-// XYZ_TO_LINEAR_DISPLAY_P3 x LINEAR_SRGB_TO_XYZ
-// Reference: http://www.russellcottrell.com/photo/matrixCalculator.htm
-mat3 LINEAR_SRGB_TO_LINEAR_DISPLAY_P3 = mat3(
-	2.4039840, -0.9899069, -0.3976415,
-	-0.8422229, 1.7988437, 0.0160354,
-	0.0482059, -0.0974068, 1.2740049
-) * mat3(
-	0.4360413, 0.3851129, 0.1430458,
-	0.2224845, 0.7169051, 0.0606104,
-	0.0139202, 0.0970672, 0.7139126
-);
+// http://www.russellcottrell.com/photo/matrixCalculator.htm
+mat3 LINEAR_SRGB_TO_LINEAR_DISPLAY_P3 = transpose( mat3(
+	0.8224621, 0.0331941, 0.0170827,
+	0.1775380, 0.9668058, 0.0723974,
+	-0.0000001, 0.0000001, 0.9105199
+) );
 
 vec4 LinearToLinear( in vec4 value ) {
 	return value;

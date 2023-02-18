@@ -27,35 +27,17 @@ export function LinearToSRGB( c ) {
  * - http://www.russellcottrell.com/photo/matrixCalculator.htm
  */
 
-const LINEAR_SRGB_TO_LINEAR_DISPLAY_P3 = new Matrix3().multiplyMatrices(
-	// XYZ to Linear Display P3
-	new Matrix3().set(
-		2.4039840, - 0.9899069, - 0.3976415,
-		- 0.8422229, 1.7988437, 0.0160354,
-		0.0482059, - 0.0974068, 1.2740049,
-	),
-	// Linear sRGB to XYZ
-	new Matrix3().set(
-		0.4360413, 0.3851129, 0.1430458,
-		0.2224845, 0.7169051, 0.0606104,
-		0.0139202, 0.0970672, 0.7139126,
-	),
-);
+const LINEAR_SRGB_TO_LINEAR_DISPLAY_P3 = new Matrix3().fromArray([
+	0.8224621, 0.0331941, 0.0170827,
+	0.1775380, 0.9668058, 0.0723974,
+	-0.0000001, 0.0000001, 0.9105199
+]);
 
-const LINEAR_DISPLAY_P3_TO_LINEAR_SRGB = new Matrix3().multiplyMatrices(
-	// XYZ to Linear sRGB
-	new Matrix3().set(
-		3.1341864, - 1.6172090, - 0.4906941,
-		- 0.9787485, 1.9161301, 0.0334334,
-		0.0719639, - 0.2289939, 1.4057537,
-	),
-	// Linear Display P3 to XYZ
-	new Matrix3().set(
-		0.5151187, 0.2919778, 0.1571035,
-		0.2411892, 0.6922441, 0.0665668,
-		- 0.0010505, 0.0418791, 0.7840713,
-	),
-);
+const LINEAR_DISPLAY_P3_TO_LINEAR_SRGB = new Matrix3().fromArray([
+	1.2249401, -0.0420569, -0.0196376,
+	-0.2249404, 1.0420571, -0.0786361,
+	0.0000001, 0.0000000, 1.0982735
+]);
 
 const _vector = new Vector3();
 
