@@ -54,6 +54,8 @@
 
 			let mixer;
 
+			THREE.ColorManagement.enabled = true;
+
 			const clock = new THREE.Clock();
 			const container = document.getElementById( 'container' );
 
@@ -63,7 +65,8 @@
 			const renderer = new THREE.WebGLRenderer( { antialias: true } );
 			renderer.setPixelRatio( window.devicePixelRatio );
 			renderer.setSize( window.innerWidth, window.innerHeight );
-			renderer.outputEncoding = THREE.sRGBEncoding;
+			renderer.outputColorSpace = THREE.DisplayP3ColorSpace;
+			renderer.getContext().drawingBufferColorSpace = THREE.DisplayP3ColorSpace;
 			container.appendChild( renderer.domElement );
 
 			const pmremGenerator = new THREE.PMREMGenerator( renderer );

@@ -43,6 +43,8 @@
 		import Stats from 'three/addons/libs/stats.module.js';
 		import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
+		THREE.ColorManagement.enabled = true;
+
 		let scene, camera, renderer, orbitControls, transformControls;
 		let mirrorSphereCamera;
 
@@ -76,7 +78,8 @@
 			renderer = new THREE.WebGLRenderer( { antialias: true, logarithmicDepthBuffer: true } );
 			renderer.setPixelRatio( window.devicePixelRatio );
 			renderer.setSize( window.innerWidth, window.innerHeight );
-			renderer.outputEncoding = THREE.sRGBEncoding;
+			renderer.outputColorSpace = THREE.DisplayP3ColorSpace;
+			renderer.getContext().drawingBufferColorSpace = THREE.DisplayP3ColorSpace;
 			renderer.useLegacyLights = false;
 			document.body.appendChild( renderer.domElement );
 
