@@ -16,22 +16,25 @@ export function LinearToSRGB( c ) {
 
 
 /**
- * Matrices for sRGB and Display P3, based on the W3C specifications
- * for sRGB and Display P3, and the ICC specification for the D50
- * connection space.
+ * Matrices converting P3 <-> Rec. 709 primaries, without gamut mapping
+ * or clipping. Based on W3C specifications for sRGB and Display P3,
+ * and ICC specifications for the D50 connection space. Values in/out
+ * are _linear_ sRGB and _linear_ Display P3.
+ *
+ * Note that both sRGB and Display P3 use the sRGB transfer functions.
  *
  * Reference:
  * - http://www.russellcottrell.com/photo/matrixCalculator.htm
  */
 
-const SRGB_TO_DISPLAY_P3 = new Matrix3().multiplyMatrices(
-	// XYZ to Display P3
+const LINEAR_SRGB_TO_LINEAR_DISPLAY_P3 = new Matrix3().multiplyMatrices(
+	// XYZ to Linear Display P3
 	new Matrix3().set(
 		2.4039840, - 0.9899069, - 0.3976415,
 		- 0.8422229, 1.7988437, 0.0160354,
 		0.0482059, - 0.0974068, 1.2740049,
 	),
-	// sRGB to XYZ
+	// Linear sRGB to XYZ
 	new Matrix3().set(
 		0.4360413, 0.3851129, 0.1430458,
 		0.2224845, 0.7169051, 0.0606104,
@@ -39,14 +42,14 @@ const SRGB_TO_DISPLAY_P3 = new Matrix3().multiplyMatrices(
 	),
 );
 
-const DISPLAY_P3_TO_SRGB = new Matrix3().multiplyMatrices(
-	// XYZ to sRGB
+const LINEAR_DISPLAY_P3_TO_LINEAR_SRGB = new Matrix3().multiplyMatrices(
+	// XYZ to Linear sRGB
 	new Matrix3().set(
 		3.1341864, - 1.6172090, - 0.4906941,
 		- 0.9787485, 1.9161301, 0.0334334,
 		0.0719639, - 0.2289939, 1.4057537,
 	),
-	// Display P3 to XYZ
+	// Linear Display P3 to XYZ
 	new Matrix3().set(
 		0.5151187, 0.2919778, 0.1571035,
 		0.2411892, 0.6922441, 0.0665668,
@@ -60,7 +63,7 @@ function DisplayP3ToLinearSRGB( color ) {
 
 	color.convertSRGBToLinear();
 
-	_vector.set( color.r, color.g, color.b ).applyMatrix3( DISPLAY_P3_TO_SRGB );
+	_vector.set( color.r, color.g, color.b ).applyMatrix3( LINEAR_DISPLAY_P3_TO_LINEAR_SRGB );
 
 	return color.setRGB( _vector.x, _vector.y, _vector.z );
 
@@ -68,7 +71,7 @@ function DisplayP3ToLinearSRGB( color ) {
 
 function LinearSRGBToDisplayP3( color ) {
 
-	_vector.set( color.r, color.g, color.b ).applyMatrix3( SRGB_TO_DISPLAY_P3 );
+	_vector.set( color.r, color.g, color.b ).applyMatrix3( LINEAR_SRGB_TO_LINEAR_DISPLAY_P3 );
 
 	return color.setRGB( _vector.x, _vector.y, _vector.z ).convertLinearToSRGB();
 
