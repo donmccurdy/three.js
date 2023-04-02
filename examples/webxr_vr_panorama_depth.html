@@ -70,6 +70,7 @@
 
 				loader.load( './textures/kandao3.jpg', function ( texture ) {
 
+					texture.encoding = THREE.sRGBEncoding;
 					texture.minFilter = THREE.NearestFilter;
 					texture.generateMipmaps = false;
 					sphere.material.map = texture;
