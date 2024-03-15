@@ -5,11 +5,13 @@ import { Mesh } from '../../../../src/objects/Mesh.js';
 import { Raycaster } from '../../../../src/core/Raycaster.js';
 import { PlaneGeometry } from '../../../../src/geometries/PlaneGeometry.js';
 import { BoxGeometry } from '../../../../src/geometries/BoxGeometry.js';
+import { SphereGeometry } from '../../../../src/geometries/SphereGeometry.js';
 import { MeshBasicMaterial } from '../../../../src/materials/MeshBasicMaterial.js';
 import { Vector2 } from '../../../../src/math/Vector2.js';
 import { Vector3 } from '../../../../src/math/Vector3.js';
 import { DoubleSide } from '../../../../src/constants.js';
 import { Material } from '../../../../src/materials/Material.js';
+import { mergeGeometries } from '../../../../examples/jsm/utils/BufferGeometryUtils.js';
 
 export default QUnit.module( 'Objects', () => {
 
@@ -91,9 +93,25 @@ export default QUnit.module( 'Objects', () => {
 
 		} );
 
-		QUnit.todo( 'volume', ( assert ) => {
+		QUnit.test( 'volume', ( assert ) => {
 
-			assert.ok( false, 'everything\'s gonna be alright' );
+			const box = new Mesh(new BoxGeometry(2, 2, 2));
+			const boxOffset = new Mesh(new BoxGeometry(2, 2, 2).translate(10, 0, 0));
+			const boxSegmented = new Mesh(new BoxGeometry(2, 2, 2, 10, 10, 10));
+
+			assert.numEqual(box.volume(), 8, 'box.volume()');
+			assert.numEqual(boxOffset.volume(), 8, 'boxOffset.volume()');
+			assert.numEqual(boxSegmented.volume(), 8, 'boxSegmented.volume()');
+
+			const sphere = new Mesh(new SphereGeometry(1));
+			const sphereOffset = new Mesh(new SphereGeometry(1).translate(-10, 0, 0));
+
+			assert.numEqual(sphere.volume(), 4 * Math.PI / 3, 'sphere.volume()');
+			assert.numEqual(sphereOffset.volume(), 4 * Math.PI / 3, 'sphereOffset.volume()');
+
+			const merged = new Mesh(mergeGeometries([boxOffset.geometry, sphereOffset.geometry]));
+
+			assert.numEqual(merged.volume(), 8 + 4 * Math.PI / 3, 'merged.volume()');
 
 		} );
 		QUnit.todo( 'updateMorphTargets', ( assert ) => {

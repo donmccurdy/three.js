@@ -8,6 +8,7 @@ import { Triangle } from '../math/Triangle.js';
 import { BackSide, FrontSide } from '../constants.js';
 import { MeshBasicMaterial } from '../materials/MeshBasicMaterial.js';
 import { BufferGeometry } from '../core/BufferGeometry.js';
+import { BufferAttribute } from '../core/BufferAttribute.js';
 
 const _inverseMatrix = /*@__PURE__*/ new Matrix4();
 const _ray = /*@__PURE__*/ new Ray();
@@ -49,11 +50,10 @@ class Mesh extends Object3D {
 
 	}
 
-	volume( precision ) {
+	volume() {
 
-		let volume = 0;
-		const vertices = this.geometry.attributes.position.array;
-		let indexes = this.geometry.index ? this.geometry.index.array : null;
+		const position = this.geometry.attributes.position;
+		const index = this.geometry.index ? this.geometry.index : null;
 
 		function triangularVolume( p1, p2, p3 ) {
 
@@ -63,38 +63,24 @@ class Mesh extends Object3D {
 			const v132 = p2.x * p1.y * p3.z;
 			const v213 = p1.x * p3.y * p2.z;
 			const v123 = p1.x * p2.y * p3.z;
+
 			return ( 1.0 / 6.0 ) * ( - v321 + v231 + v312 - v132 - v213 + v123 );
 
 		}
 
-		if ( ! indexes ) {
+		let volume = 0;
 
-			indexes = Array.from( { length: vertices.length / 3 }, ( _, i ) => i );
+		for ( let i = 0, il = index ? index.count : position.count; i < il; i += 3 ) {
 
-		}
+			_vA.fromBufferAttribute( position, index ? index.getX( i ) : i );
+			_vB.fromBufferAttribute( position, index ? index.getX( i + 1 ) : ( i + 1 ) );
+			_vC.fromBufferAttribute( position, index ? index.getX( i + 2 ) : ( i + 2 ) );
 
-		const vectorA = new Vector3();
-		const vectorB = new Vector3();
-		const vectorC = new Vector3();
-
-		for ( let i = 0; i < indexes.length; i += 3 ) {
-
-			vectorA.fromBufferAttribute( vertices, indexes[ i ] * 3 );
-			vectorB.fromBufferAttribute( vertices, indexes[ i + 1 ] * 3 );
-			vectorC.fromBufferAttribute( vertices, indexes[ i + 2 ] * 3 );
-			volume += triangularVolume( vectorA, vectorB, vectorC );
+			volume += triangularVolume( _vA, _vB, _vC );
 
 		}
 
-		if ( precision ) {
-
-			return Math.abs( volume );
-
-		} else {
-
-			return Math.abs( volume / 1000 );
-
-		}
+		return Math.abs( volume );
 
 	}
 
