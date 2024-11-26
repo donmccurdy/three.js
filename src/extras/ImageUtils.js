@@ -1,5 +1,8 @@
+import { self } from '../globals.js';
 import { createElementNS } from '../utils.js';
 import { SRGBToLinear } from '../math/ColorManagement.js';
+
+const { HTMLCanvasElement, HTMLImageElement, ImageBitmap, ImageData } = self;
 
 let _canvas;
 

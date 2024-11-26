@@ -155,6 +155,8 @@ export { createCanvasElement } from './utils.js';
 export * from './constants.js';
 export * from './Three.Legacy.js';
 
+import { window } from './globals.js';
+
 if ( typeof __THREE_DEVTOOLS__ !== 'undefined' ) {
 
 	__THREE_DEVTOOLS__.dispatchEvent( new CustomEvent( 'register', { detail: {

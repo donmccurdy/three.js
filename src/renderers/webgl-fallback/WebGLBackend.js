@@ -13,6 +13,9 @@ import { WebGLBufferRenderer } from './WebGLBufferRenderer.js';
 
 import { warnOnce } from '../../utils.js';
 import { WebGLCoordinateSystem } from '../../constants.js';
+import { self } from '../../globals.js';
+
+const { requestAnimationFrame } = self;
 
 //
 

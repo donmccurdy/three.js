@@ -1,3 +1,5 @@
+import { window } from '../globals.js';
+
 let _context;
 
 class AudioContext {

@@ -6,8 +6,11 @@ import { expression } from '../code/ExpressionNode.js';
 import { maxMipLevel } from '../utils/MaxMipLevelNode.js';
 import { nodeProxy, vec3, nodeObject, int } from '../tsl/TSLBase.js';
 import { NodeUpdateType } from '../core/constants.js';
+import { self } from '../../globals.js';
 
 import { IntType, UnsignedIntType } from '../../constants.js';
+
+const { ImageBitmap } = self;
 
 class TextureNode extends UniformNode {
 

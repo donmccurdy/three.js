@@ -1,5 +1,8 @@
 import { Cache } from './Cache.js';
 import { Loader } from './Loader.js';
+import { self } from '../globals.js';
+
+const { ProgressEvent, DOMParser } = self;
 
 const loading = {};
 

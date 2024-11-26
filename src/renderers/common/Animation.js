@@ -1,3 +1,5 @@
+import { self } from '../../globals.js';
+
 class Animation {
 
 	constructor( nodes, info ) {

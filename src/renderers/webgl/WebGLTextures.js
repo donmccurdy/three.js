@@ -3,6 +3,15 @@ import { createElementNS } from '../../utils.js';
 import { ColorManagement } from '../../math/ColorManagement.js';
 import { Vector2 } from '../../math/Vector2.js';
 import { getByteLength } from '../../extras/TextureUtils.js';
+import { self, navigator } from '../../globals.js';
+
+const {
+	HTMLImageElement,
+	HTMLCanvasElement,
+	ImageBitmap,
+	OffscreenCanvas,
+	VideoFrame,
+} = self;
 
 function WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info ) {
 

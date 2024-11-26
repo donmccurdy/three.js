@@ -15,6 +15,8 @@ import WebGPUTextureUtils from './utils/WebGPUTextureUtils.js';
 
 import { WebGPUCoordinateSystem } from '../../constants.js';
 
+import { navigator } from '../../globals.js';
+
 //
 
 class WebGPUBackend extends Backend {

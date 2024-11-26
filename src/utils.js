@@ -1,3 +1,5 @@
+import { document } from './globals.js';
+
 function arrayMin( array ) {
 
 	if ( array.length === 0 ) return Infinity;

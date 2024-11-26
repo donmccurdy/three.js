@@ -1,5 +1,7 @@
 import { GPUPrimitiveTopology, GPUTextureFormat } from './WebGPUConstants.js';
 
+import { navigator } from '../../../globals.js';
+
 class WebGPUUtils {
 
 	constructor( backend ) {

@@ -1,5 +1,12 @@
 import { ImageUtils } from '../extras/ImageUtils.js';
 import { generateUUID } from '../math/MathUtils.js';
+import { self } from '../globals.js';
+
+const {
+	HTMLImageElement,
+	HTMLCanvasElement,
+	ImageBitmap
+} = self;
 
 let _sourceId = 0;
 

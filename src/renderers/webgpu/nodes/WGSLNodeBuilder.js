@@ -18,6 +18,8 @@ import ExpressionNode from '../../../nodes/code/ExpressionNode.js';
 
 import { NoColorSpace, FloatType, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter } from '../../../constants.js';
 
+import { navigator, self } from '../../../globals.js';
+
 // GPUShaderStage is not defined in browsers not supporting WebGPU
 const GPUShaderStage = ( typeof self !== 'undefined' ) ? self.GPUShaderStage : { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
 

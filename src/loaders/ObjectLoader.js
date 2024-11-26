@@ -62,6 +62,9 @@ import * as Geometries from '../geometries/Geometries.js';
 import { getTypedArray } from '../utils.js';
 import { Box3 } from '../math/Box3.js';
 import { Sphere } from '../math/Sphere.js';
+import { self } from '../globals.js';
+
+const { HTMLImageElement } = self;
 
 class ObjectLoader extends Loader {
 
